@@ -34,8 +34,23 @@ struct Config {
 struct Person {
     id: String,
     name: String,
+    patronymic: Option<String>,
     surname: String,
+    /// Surname taken at marriage. The primary surname stays the one at birth,
+    /// so maiden names keep displaying correctly after import.
+    married_surname: Option<String>,
     sex: String,
+}
+
+impl Person {
+    /// The given name as GEDCOM spells it: the patronymic is part of it,
+    /// even though the card keeps the two apart.
+    fn given(&self) -> String {
+        match &self.patronymic {
+            Some(patronymic) => format!("{} {patronymic}", self.name),
+            None => self.name.clone(),
+        }
+    }
 }
 
 /// The single seam: cards + config in, GEDCOM 5.5.1 text or diagnostics out.
@@ -127,6 +142,28 @@ fn take_string(
     }
 }
 
+/// Like `take_string`, but an absent field is not a problem. A present
+/// field still has to be a string, so a typo'd value is still caught.
+fn take_optional_string(
+    mapping: &mut serde_norway::Mapping,
+    field: &str,
+    card: Option<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<String> {
+    match mapping.remove(field) {
+        Some(serde_norway::Value::String(value)) => Some(value),
+        Some(_) => {
+            diagnostics.push(Diagnostic {
+                card: card.map(String::from),
+                field: Some(field.to_string()),
+                reason: "expected a string".to_string(),
+            });
+            None
+        }
+        None => None,
+    }
+}
+
 /// Every key left in the mapping after the known ones were taken out
 /// is unknown; reported in sorted order for determinism.
 fn report_unknown_keys(
@@ -190,7 +227,10 @@ fn parse_card(card: &Card, diagnostics: &mut Vec<Diagnostic>) -> Option<Person> 
     }
     let mut mapping = parse_mapping(&card.yaml, Some(&card.id), diagnostics)?;
     let name = take_string(&mut mapping, "name", Some(&card.id), diagnostics);
+    let patronymic = take_optional_string(&mut mapping, "patronymic", Some(&card.id), diagnostics);
     let surname = take_string(&mut mapping, "surname", Some(&card.id), diagnostics);
+    let married_surname =
+        take_optional_string(&mut mapping, "married_surname", Some(&card.id), diagnostics);
     let sex = take_string(&mut mapping, "sex", Some(&card.id), diagnostics).and_then(|sex| {
         if sex == "M" || sex == "F" {
             Some(sex)
@@ -210,7 +250,9 @@ fn parse_card(card: &Card, diagnostics: &mut Vec<Diagnostic>) -> Option<Person> 
     Some(Person {
         id: card.id.clone(),
         name: name?,
+        patronymic,
         surname: surname?,
+        married_surname,
         sex: sex?,
     })
 }
@@ -227,9 +269,15 @@ fn emit(config: &Config, people: &[Person]) -> String {
     ged.push_str(&format!("1 LANG {}\n", config.language));
     for (index, person) in people.iter().enumerate() {
         ged.push_str(&format!("0 @I{}@ INDI\n", index + 1));
-        ged.push_str(&format!("1 NAME {} /{}/\n", person.name, person.surname));
-        ged.push_str(&format!("2 GIVN {}\n", person.name));
+        let given = person.given();
+        ged.push_str(&format!("1 NAME {given} /{}/\n", person.surname));
+        ged.push_str(&format!("2 GIVN {given}\n"));
         ged.push_str(&format!("2 SURN {}\n", person.surname));
+        // _MARNM is not in GEDCOM 5.5.1; it is the extension MyHeritage
+        // reads and writes for a surname taken at marriage.
+        if let Some(married_surname) = &person.married_surname {
+            ged.push_str(&format!("2 _MARNM {married_surname}\n"));
+        }
         ged.push_str(&format!("1 SEX {}\n", person.sex));
     }
     ged.push_str(&format!("0 @SUB1@ SUBM\n1 NAME {}\n", config.submitter));

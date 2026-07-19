@@ -12,7 +12,7 @@ by hand, and safe to delete and rebuild.
 
 ## Status
 
-Early. Today a card carries a name, a surname and a sex, and the compiler emits
+Early. Today a card carries a full name and a sex, and the compiler emits
 `INDI` records. Relationships (`father`/`mother`, marriages) and the synthesized
 `FAM` records are the next milestone — see [ADR 0001](docs/adr/0001-no-family-entities.md)
 for how families are meant to work.
@@ -52,6 +52,24 @@ name: Иван
 surname: Иванов
 sex: M
 ```
+
+`patronymic` and `married_surname` are optional:
+
+```yaml
+name: Мария
+patronymic: Петровна
+surname: Сидорова
+married_surname: Иванова
+sex: F
+```
+
+The patronymic is part of the name — it compiles to `1 NAME Мария Петровна /Сидорова/`
+with `2 GIVN Мария Петровна` — but it stays its own field on the card rather than being
+glued onto `name`.
+
+`surname` is always the surname at birth. A `married_surname` is emitted as `2 _MARNM`,
+the extension MyHeritage uses, which is what makes maiden names display correctly after
+import.
 
 Run from that directory:
 

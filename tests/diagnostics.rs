@@ -105,6 +105,28 @@ fn invalid_sex_value_is_reported() {
     );
 }
 
+/// The optional name fields may be left out, but a value that is not
+/// a string is still a mistake worth reporting.
+#[test]
+fn non_string_optional_name_fields_are_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\npatronymic: [Петрович]\nsurname: Петров\nmarried_surname: 1917\nsex: M\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(Some("ivan-petrov"), Some("patronymic"), "expected a string"),
+            diagnostic(
+                Some("ivan-petrov"),
+                Some("married_surname"),
+                "expected a string"
+            ),
+        ]
+    );
+}
+
 #[test]
 fn missing_required_card_fields_are_reported() {
     let cards = [card("ivan-petrov", "name: Иван\n")];
