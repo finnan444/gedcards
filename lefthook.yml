@@ -1,0 +1,4 @@
+pre-push:
+  jobs:
+    - name: check
+      run: just check
