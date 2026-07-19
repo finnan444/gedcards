@@ -1,1 +1,9 @@
 /target
+
+# Share the recommended-extensions list; the rest of .vscode stays local.
+# The first line is required: a global ~/.gitignore may exclude the directory
+# itself, and git does not descend into an excluded directory, so a negation
+# for a file inside it would never be evaluated.
+!.vscode/
+.vscode/*
+!.vscode/extensions.json
