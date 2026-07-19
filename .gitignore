@@ -7,3 +7,7 @@
 !.vscode/
 .vscode/*
 !.vscode/extensions.json
+
+# Real GEDCOM exports: personal data of living relatives, never committed.
+*.ged
+!tests/fixtures/**/*.ged

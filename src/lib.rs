@@ -274,7 +274,9 @@ fn emit(config: &Config, people: &[Person]) -> String {
         ged.push_str(&format!("2 GIVN {given}\n"));
         ged.push_str(&format!("2 SURN {}\n", person.surname));
         // _MARNM is not in GEDCOM 5.5.1; it is the extension MyHeritage
-        // reads and writes for a surname taken at marriage.
+        // reads and writes for a surname taken at marriage. Shape checked
+        // against a MyHeritage export (2026-07-19): level 2, directly after
+        // SURN, and the value is a bare surname — not a slashed full name.
         if let Some(married_surname) = &person.married_surname {
             ged.push_str(&format!("2 _MARNM {married_surname}\n"));
         }
