@@ -44,7 +44,8 @@ struct Person {
 
 impl Person {
     /// The given name as GEDCOM spells it: the patronymic is part of it,
-    /// even though the card keeps the two apart.
+    /// even though the card keeps the two apart. Neither GEDCOM version has
+    /// a patronymic piece — see docs/adr/0002-patronymic-joins-the-given-name.md.
     fn given(&self) -> String {
         match &self.patronymic {
             Some(patronymic) => format!("{} {patronymic}", self.name),
