@@ -1,0 +1,16 @@
+0 HEAD
+1 SOUR gedc
+1 SUBM @SUB1@
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 LANG Russian
+0 @I1@ INDI
+1 NAME Анна /Петрова/
+2 GIVN Анна
+2 SURN Петрова
+1 SEX F
+0 @SUB1@ SUBM
+1 NAME Иван Иванов
+0 TRLR

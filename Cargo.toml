@@ -1,0 +1,19 @@
+[package]
+name = "gedcards"
+version = "0.1.0"
+edition = "2024"
+description = "Compile per-person YAML cards into a GEDCOM 5.5.1 file"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/finnan444/gedcards"
+keywords = ["gedcom", "genealogy", "yaml", "family-tree"]
+categories = ["command-line-utilities"]
+
+[lib]
+name = "gedcards"
+
+[[bin]]
+name = "gedc"
+path = "src/main.rs"
+
+[dependencies]
+serde_norway = "0.9.42"

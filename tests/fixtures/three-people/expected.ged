@@ -1,0 +1,26 @@
+0 HEAD
+1 SOUR gedc
+1 SUBM @SUB1@
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 LANG Russian
+0 @I1@ INDI
+1 NAME Иван /Иванов/
+2 GIVN Иван
+2 SURN Иванов
+1 SEX M
+0 @I2@ INDI
+1 NAME Мария /Сидорова/
+2 GIVN Мария
+2 SURN Сидорова
+1 SEX F
+0 @I3@ INDI
+1 NAME Пётр /Иванов/
+2 GIVN Пётр
+2 SURN Иванов
+1 SEX M
+0 @SUB1@ SUBM
+1 NAME Иван Иванов
+0 TRLR
