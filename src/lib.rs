@@ -114,9 +114,39 @@ fn parse_mapping(
     }
 }
 
+/// Checks a value that a field was set to. A non-string, a blank string or
+/// one padded with whitespace is reported and yields None; anything else is
+/// the value verbatim. Padding is refused rather than trimmed away, so the
+/// card and the GEDCOM line always read the same.
+fn check_value(
+    value: serde_norway::Value,
+    field: &str,
+    card: Option<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<String> {
+    let reason = match value {
+        serde_norway::Value::String(value) => {
+            if value.trim().is_empty() {
+                "must not be empty"
+            } else if value.trim() != value {
+                "must not have leading or trailing whitespace"
+            } else {
+                return Some(value);
+            }
+        }
+        _ => "expected a string",
+    };
+    diagnostics.push(Diagnostic {
+        card: card.map(String::from),
+        field: Some(field.to_string()),
+        reason: reason.to_string(),
+    });
+    None
+}
+
 /// Pulls a required string field out of a parsed mapping, reporting
-/// a diagnostic (attributed to `card`, None for config) when absent,
-/// non-string or blank.
+/// a diagnostic (attributed to `card`, None for config) when absent
+/// or rejected by `check_value`.
 fn take_string(
     mapping: &mut serde_norway::Mapping,
     field: &str,
@@ -124,23 +154,7 @@ fn take_string(
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
     match mapping.remove(field) {
-        Some(serde_norway::Value::String(value)) if value.trim().is_empty() => {
-            diagnostics.push(Diagnostic {
-                card: card.map(String::from),
-                field: Some(field.to_string()),
-                reason: "must not be empty".to_string(),
-            });
-            None
-        }
-        Some(serde_norway::Value::String(value)) => Some(value),
-        Some(_) => {
-            diagnostics.push(Diagnostic {
-                card: card.map(String::from),
-                field: Some(field.to_string()),
-                reason: "expected a string".to_string(),
-            });
-            None
-        }
+        Some(value) => check_value(value, field, card, diagnostics),
         None => {
             diagnostics.push(Diagnostic {
                 card: card.map(String::from),
@@ -152,36 +166,18 @@ fn take_string(
     }
 }
 
-/// Like `take_string`, but an absent field is not a problem. A present
-/// field still has to be a non-blank string, so a typo'd value is still
-/// caught. A blank value is a mistake rather than a way to say "absent":
-/// leaving the key out already says that, and one way is enough.
+/// Like `take_string`, but an absent field is not a problem. A present one
+/// still goes through `check_value`, so a typo'd value is still caught.
+/// A blank value is a mistake rather than a way to say "absent": leaving
+/// the key out already says that, and one way is enough.
 fn take_optional_string(
     mapping: &mut serde_norway::Mapping,
     field: &str,
     card: Option<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
-    match mapping.remove(field) {
-        Some(serde_norway::Value::String(value)) if value.trim().is_empty() => {
-            diagnostics.push(Diagnostic {
-                card: card.map(String::from),
-                field: Some(field.to_string()),
-                reason: "must not be empty".to_string(),
-            });
-            None
-        }
-        Some(serde_norway::Value::String(value)) => Some(value),
-        Some(_) => {
-            diagnostics.push(Diagnostic {
-                card: card.map(String::from),
-                field: Some(field.to_string()),
-                reason: "expected a string".to_string(),
-            });
-            None
-        }
-        None => None,
-    }
+    let value = mapping.remove(field)?;
+    check_value(value, field, card, diagnostics)
 }
 
 /// Every key left in the mapping after the known ones were taken out

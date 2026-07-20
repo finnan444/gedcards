@@ -164,6 +164,25 @@ fn blank_required_card_fields_are_reported() {
     );
 }
 
+/// Padding is refused rather than trimmed: silently rewriting the value
+/// would leave the card and the emitted GEDCOM saying different things.
+#[test]
+fn padded_values_are_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: ' Иван'\npatronymic: 'Петрович '\nsurname: Петров\nsex: M\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    let reason = "must not have leading or trailing whitespace";
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(Some("ivan-petrov"), Some("name"), reason),
+            diagnostic(Some("ivan-petrov"), Some("patronymic"), reason),
+        ]
+    );
+}
+
 #[test]
 fn blank_config_value_is_reported() {
     let config = "submitter: ''\nlanguage: Russian\n";
