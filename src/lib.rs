@@ -115,7 +115,8 @@ fn parse_mapping(
 }
 
 /// Pulls a required string field out of a parsed mapping, reporting
-/// a diagnostic (attributed to `card`, None for config) when absent or non-string.
+/// a diagnostic (attributed to `card`, None for config) when absent,
+/// non-string or blank.
 fn take_string(
     mapping: &mut serde_norway::Mapping,
     field: &str,
@@ -123,6 +124,14 @@ fn take_string(
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
     match mapping.remove(field) {
+        Some(serde_norway::Value::String(value)) if value.trim().is_empty() => {
+            diagnostics.push(Diagnostic {
+                card: card.map(String::from),
+                field: Some(field.to_string()),
+                reason: "must not be empty".to_string(),
+            });
+            None
+        }
         Some(serde_norway::Value::String(value)) => Some(value),
         Some(_) => {
             diagnostics.push(Diagnostic {
@@ -144,7 +153,9 @@ fn take_string(
 }
 
 /// Like `take_string`, but an absent field is not a problem. A present
-/// field still has to be a string, so a typo'd value is still caught.
+/// field still has to be a non-blank string, so a typo'd value is still
+/// caught. A blank value is a mistake rather than a way to say "absent":
+/// leaving the key out already says that, and one way is enough.
 fn take_optional_string(
     mapping: &mut serde_norway::Mapping,
     field: &str,
@@ -152,6 +163,14 @@ fn take_optional_string(
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
     match mapping.remove(field) {
+        Some(serde_norway::Value::String(value)) if value.trim().is_empty() => {
+            diagnostics.push(Diagnostic {
+                card: card.map(String::from),
+                field: Some(field.to_string()),
+                reason: "must not be empty".to_string(),
+            });
+            None
+        }
         Some(serde_norway::Value::String(value)) => Some(value),
         Some(_) => {
             diagnostics.push(Diagnostic {

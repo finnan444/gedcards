@@ -127,6 +127,54 @@ fn non_string_optional_name_fields_are_reported() {
     );
 }
 
+/// An empty optional field would otherwise reach the emitter and produce
+/// a stray space in GIVN or a valueless `2 _MARNM` line.
+#[test]
+fn blank_optional_name_fields_are_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\npatronymic: ''\nsurname: Петров\nmarried_surname: '   '\nsex: M\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(Some("ivan-petrov"), Some("patronymic"), "must not be empty"),
+            diagnostic(
+                Some("ivan-petrov"),
+                Some("married_surname"),
+                "must not be empty"
+            ),
+        ]
+    );
+}
+
+/// The same rule holds for required fields: a blank one is as unusable
+/// as a missing one, and silently emits `1 NAME  //`.
+#[test]
+fn blank_required_card_fields_are_reported() {
+    let cards = [card("ivan-petrov", "name: ''\nsurname: '  '\nsex: M\n")];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(Some("ivan-petrov"), Some("name"), "must not be empty"),
+            diagnostic(Some("ivan-petrov"), Some("surname"), "must not be empty"),
+        ]
+    );
+}
+
+#[test]
+fn blank_config_value_is_reported() {
+    let config = "submitter: ''\nlanguage: Russian\n";
+    let cards = [card("ivan-petrov", VALID_CARD)];
+    let diagnostics = compile(config, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(None, Some("submitter"), "must not be empty")]
+    );
+}
+
 #[test]
 fn missing_required_card_fields_are_reported() {
     let cards = [card("ivan-petrov", "name: Иван\n")];
