@@ -105,6 +105,134 @@ fn invalid_sex_value_is_reported() {
     );
 }
 
+/// The optional name fields may be left out, but a value that is not
+/// a string is still a mistake worth reporting.
+#[test]
+fn non_string_optional_name_fields_are_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\npatronymic: [Петрович]\nsurname: Петров\nmarried_surname: 1917\nsex: M\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(Some("ivan-petrov"), Some("patronymic"), "expected a string"),
+            diagnostic(
+                Some("ivan-petrov"),
+                Some("married_surname"),
+                "expected a string"
+            ),
+        ]
+    );
+}
+
+/// An empty optional field would otherwise reach the emitter and produce
+/// a stray space in GIVN or a valueless `2 _MARNM` line.
+#[test]
+fn blank_optional_name_fields_are_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\npatronymic: ''\nsurname: Петров\nmarried_surname: '   '\nsex: M\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(Some("ivan-petrov"), Some("patronymic"), "must not be empty"),
+            diagnostic(
+                Some("ivan-petrov"),
+                Some("married_surname"),
+                "must not be empty"
+            ),
+        ]
+    );
+}
+
+/// The same rule holds for required fields: a blank one is as unusable
+/// as a missing one, and silently emits `1 NAME  //`.
+#[test]
+fn blank_required_card_fields_are_reported() {
+    let cards = [card("ivan-petrov", "name: ''\nsurname: '  '\nsex: M\n")];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(Some("ivan-petrov"), Some("name"), "must not be empty"),
+            diagnostic(Some("ivan-petrov"), Some("surname"), "must not be empty"),
+        ]
+    );
+}
+
+/// `patronymic:` is how someone writes "no patronymic", so the diagnostic
+/// names the fix instead of complaining about the type. All three YAML
+/// spellings of null read the same.
+#[test]
+fn valueless_optional_key_is_reported() {
+    for yaml in [
+        "name: Иван\npatronymic:\nsurname: Петров\nsex: M\n",
+        "name: Иван\npatronymic: null\nsurname: Петров\nsex: M\n",
+        "name: Иван\npatronymic: ~\nsurname: Петров\nsex: M\n",
+    ] {
+        let cards = [card("ivan-petrov", yaml)];
+        let diagnostics = compile(CONFIG, &cards).unwrap_err();
+        assert_eq!(
+            diagnostics,
+            vec![diagnostic(
+                Some("ivan-petrov"),
+                Some("patronymic"),
+                "remove the key instead of leaving it empty"
+            )],
+            "for {yaml:?}"
+        );
+    }
+}
+
+/// A required key with no value is as absent as no key at all, and says so.
+#[test]
+fn valueless_required_key_reads_as_missing() {
+    let cards = [card("ivan-petrov", "name:\nsurname: Петров\nsex: M\n")];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("name"),
+            "required field is missing"
+        )]
+    );
+}
+
+/// Padding is refused rather than trimmed: silently rewriting the value
+/// would leave the card and the emitted GEDCOM saying different things.
+#[test]
+fn padded_values_are_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: ' Иван'\npatronymic: 'Петрович '\nsurname: Петров\nsex: M\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    let reason = "must not have leading or trailing whitespace";
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(Some("ivan-petrov"), Some("name"), reason),
+            diagnostic(Some("ivan-petrov"), Some("patronymic"), reason),
+        ]
+    );
+}
+
+#[test]
+fn blank_config_value_is_reported() {
+    let config = "submitter: ''\nlanguage: Russian\n";
+    let cards = [card("ivan-petrov", VALID_CARD)];
+    let diagnostics = compile(config, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(None, Some("submitter"), "must not be empty")]
+    );
+}
+
 #[test]
 fn missing_required_card_fields_are_reported() {
     let cards = [card("ivan-petrov", "name: Иван\n")];

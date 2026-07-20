@@ -46,6 +46,15 @@ fn three_people_fixture_compiles_to_expected_ged() {
     assert_eq!(ged, expected("three-people"));
 }
 
+/// Covers the four combinations of the optional name fields: neither,
+/// married surname only, both, and patronymic only.
+#[test]
+fn full_names_fixture_compiles_to_expected_ged() {
+    let (config_yaml, cards) = load_fixture("full-names");
+    let ged = compile(&config_yaml, &cards).expect("compile should succeed");
+    assert_eq!(ged, expected("full-names"));
+}
+
 #[test]
 fn output_does_not_depend_on_card_order() {
     let (config_yaml, mut cards) = load_fixture("three-people");

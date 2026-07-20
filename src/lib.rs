@@ -34,8 +34,24 @@ struct Config {
 struct Person {
     id: String,
     name: String,
+    patronymic: Option<String>,
     surname: String,
+    /// Surname taken at marriage. The primary surname stays the one at birth,
+    /// so maiden names keep displaying correctly after import.
+    married_surname: Option<String>,
     sex: String,
+}
+
+impl Person {
+    /// The given name as GEDCOM spells it: the patronymic is part of it,
+    /// even though the card keeps the two apart. Neither GEDCOM version has
+    /// a patronymic piece — see docs/adr/0002-patronymic-joins-the-given-name.md.
+    fn given(&self) -> String {
+        match &self.patronymic {
+            Some(patronymic) => format!("{} {patronymic}", self.name),
+            None => self.name.clone(),
+        }
+    }
 }
 
 /// The single seam: cards + config in, GEDCOM 5.5.1 text or diagnostics out.
@@ -98,8 +114,40 @@ fn parse_mapping(
     }
 }
 
+/// Checks a value that a field was set to. A non-string, a blank string or
+/// one padded with whitespace is reported and yields None; anything else is
+/// the value verbatim. Padding is refused rather than trimmed away, so the
+/// card and the GEDCOM line always read the same.
+fn check_value(
+    value: serde_norway::Value,
+    field: &str,
+    card: Option<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<String> {
+    let reason = match value {
+        serde_norway::Value::String(value) => {
+            if value.trim().is_empty() {
+                "must not be empty"
+            } else if value.trim() != value {
+                "must not have leading or trailing whitespace"
+            } else {
+                return Some(value);
+            }
+        }
+        _ => "expected a string",
+    };
+    diagnostics.push(Diagnostic {
+        card: card.map(String::from),
+        field: Some(field.to_string()),
+        reason: reason.to_string(),
+    });
+    None
+}
+
 /// Pulls a required string field out of a parsed mapping, reporting
-/// a diagnostic (attributed to `card`, None for config) when absent or non-string.
+/// a diagnostic (attributed to `card`, None for config) when absent
+/// or rejected by `check_value`. A key written with no value at all
+/// (`name:`, `name: null`, `name: ~`) is as absent as no key.
 fn take_string(
     mapping: &mut serde_norway::Mapping,
     field: &str,
@@ -107,16 +155,7 @@ fn take_string(
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
     match mapping.remove(field) {
-        Some(serde_norway::Value::String(value)) => Some(value),
-        Some(_) => {
-            diagnostics.push(Diagnostic {
-                card: card.map(String::from),
-                field: Some(field.to_string()),
-                reason: "expected a string".to_string(),
-            });
-            None
-        }
-        None => {
+        Some(serde_norway::Value::Null) | None => {
             diagnostics.push(Diagnostic {
                 card: card.map(String::from),
                 field: Some(field.to_string()),
@@ -124,6 +163,30 @@ fn take_string(
             });
             None
         }
+        Some(value) => check_value(value, field, card, diagnostics),
+    }
+}
+
+/// Like `take_string`, but an absent field is not a problem. A present one
+/// still goes through `check_value`, so a typo'd value is still caught.
+/// A valueless key is a mistake rather than a way to say "absent": leaving
+/// the key out already says that, and one way is enough.
+fn take_optional_string(
+    mapping: &mut serde_norway::Mapping,
+    field: &str,
+    card: Option<&str>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<String> {
+    match mapping.remove(field)? {
+        serde_norway::Value::Null => {
+            diagnostics.push(Diagnostic {
+                card: card.map(String::from),
+                field: Some(field.to_string()),
+                reason: "remove the key instead of leaving it empty".to_string(),
+            });
+            None
+        }
+        value => check_value(value, field, card, diagnostics),
     }
 }
 
@@ -190,7 +253,10 @@ fn parse_card(card: &Card, diagnostics: &mut Vec<Diagnostic>) -> Option<Person> 
     }
     let mut mapping = parse_mapping(&card.yaml, Some(&card.id), diagnostics)?;
     let name = take_string(&mut mapping, "name", Some(&card.id), diagnostics);
+    let patronymic = take_optional_string(&mut mapping, "patronymic", Some(&card.id), diagnostics);
     let surname = take_string(&mut mapping, "surname", Some(&card.id), diagnostics);
+    let married_surname =
+        take_optional_string(&mut mapping, "married_surname", Some(&card.id), diagnostics);
     let sex = take_string(&mut mapping, "sex", Some(&card.id), diagnostics).and_then(|sex| {
         if sex == "M" || sex == "F" {
             Some(sex)
@@ -210,7 +276,9 @@ fn parse_card(card: &Card, diagnostics: &mut Vec<Diagnostic>) -> Option<Person> 
     Some(Person {
         id: card.id.clone(),
         name: name?,
+        patronymic,
         surname: surname?,
+        married_surname,
         sex: sex?,
     })
 }
@@ -227,9 +295,17 @@ fn emit(config: &Config, people: &[Person]) -> String {
     ged.push_str(&format!("1 LANG {}\n", config.language));
     for (index, person) in people.iter().enumerate() {
         ged.push_str(&format!("0 @I{}@ INDI\n", index + 1));
-        ged.push_str(&format!("1 NAME {} /{}/\n", person.name, person.surname));
-        ged.push_str(&format!("2 GIVN {}\n", person.name));
+        let given = person.given();
+        ged.push_str(&format!("1 NAME {given} /{}/\n", person.surname));
+        ged.push_str(&format!("2 GIVN {given}\n"));
         ged.push_str(&format!("2 SURN {}\n", person.surname));
+        // _MARNM is not in GEDCOM 5.5.1; it is the extension MyHeritage
+        // reads and writes for a surname taken at marriage. Shape checked
+        // against a MyHeritage export (2026-07-19): level 2, directly after
+        // SURN, and the value is a bare surname — not a slashed full name.
+        if let Some(married_surname) = &person.married_surname {
+            ged.push_str(&format!("2 _MARNM {married_surname}\n"));
+        }
         ged.push_str(&format!("1 SEX {}\n", person.sex));
     }
     ged.push_str(&format!("0 @SUB1@ SUBM\n1 NAME {}\n", config.submitter));
