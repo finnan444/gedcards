@@ -164,6 +164,45 @@ fn blank_required_card_fields_are_reported() {
     );
 }
 
+/// `patronymic:` is how someone writes "no patronymic", so the diagnostic
+/// names the fix instead of complaining about the type. All three YAML
+/// spellings of null read the same.
+#[test]
+fn valueless_optional_key_is_reported() {
+    for yaml in [
+        "name: Иван\npatronymic:\nsurname: Петров\nsex: M\n",
+        "name: Иван\npatronymic: null\nsurname: Петров\nsex: M\n",
+        "name: Иван\npatronymic: ~\nsurname: Петров\nsex: M\n",
+    ] {
+        let cards = [card("ivan-petrov", yaml)];
+        let diagnostics = compile(CONFIG, &cards).unwrap_err();
+        assert_eq!(
+            diagnostics,
+            vec![diagnostic(
+                Some("ivan-petrov"),
+                Some("patronymic"),
+                "remove the key instead of leaving it empty"
+            )],
+            "for {yaml:?}"
+        );
+    }
+}
+
+/// A required key with no value is as absent as no key at all, and says so.
+#[test]
+fn valueless_required_key_reads_as_missing() {
+    let cards = [card("ivan-petrov", "name:\nsurname: Петров\nsex: M\n")];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("name"),
+            "required field is missing"
+        )]
+    );
+}
+
 /// Padding is refused rather than trimmed: silently rewriting the value
 /// would leave the card and the emitted GEDCOM saying different things.
 #[test]

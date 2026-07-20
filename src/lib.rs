@@ -146,7 +146,8 @@ fn check_value(
 
 /// Pulls a required string field out of a parsed mapping, reporting
 /// a diagnostic (attributed to `card`, None for config) when absent
-/// or rejected by `check_value`.
+/// or rejected by `check_value`. A key written with no value at all
+/// (`name:`, `name: null`, `name: ~`) is as absent as no key.
 fn take_string(
     mapping: &mut serde_norway::Mapping,
     field: &str,
@@ -154,8 +155,7 @@ fn take_string(
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
     match mapping.remove(field) {
-        Some(value) => check_value(value, field, card, diagnostics),
-        None => {
+        Some(serde_norway::Value::Null) | None => {
             diagnostics.push(Diagnostic {
                 card: card.map(String::from),
                 field: Some(field.to_string()),
@@ -163,12 +163,13 @@ fn take_string(
             });
             None
         }
+        Some(value) => check_value(value, field, card, diagnostics),
     }
 }
 
 /// Like `take_string`, but an absent field is not a problem. A present one
 /// still goes through `check_value`, so a typo'd value is still caught.
-/// A blank value is a mistake rather than a way to say "absent": leaving
+/// A valueless key is a mistake rather than a way to say "absent": leaving
 /// the key out already says that, and one way is enough.
 fn take_optional_string(
     mapping: &mut serde_norway::Mapping,
@@ -176,8 +177,17 @@ fn take_optional_string(
     card: Option<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
-    let value = mapping.remove(field)?;
-    check_value(value, field, card, diagnostics)
+    match mapping.remove(field)? {
+        serde_norway::Value::Null => {
+            diagnostics.push(Diagnostic {
+                card: card.map(String::from),
+                field: Some(field.to_string()),
+                reason: "remove the key instead of leaving it empty".to_string(),
+            });
+            None
+        }
+        value => check_value(value, field, card, diagnostics),
+    }
 }
 
 /// Every key left in the mapping after the known ones were taken out
