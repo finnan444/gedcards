@@ -1,0 +1,92 @@
+0 HEAD
+1 SOUR gedc
+1 SUBM @SUB1@
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 LANG Russian
+0 @I1@ INDI
+1 NAME Борис /Орлов/
+2 GIVN Борис
+2 SURN Орлов
+1 SEX M
+1 BIRT
+2 DATE 11 FEB 1900
+1 FAMS @F2@
+1 FAMS @F3@
+0 @I2@ INDI
+1 NAME Дарья /Петрова/
+2 GIVN Дарья
+2 SURN Петрова
+1 SEX F
+1 BIRT
+2 DATE 1905
+1 DEAT
+2 DATE 1938
+1 FAMS @F2@
+0 @I3@ INDI
+1 NAME Елена /Кузнецова/
+2 GIVN Елена
+2 SURN Кузнецова
+1 SEX F
+1 BIRT
+2 DATE 1915
+1 FAMS @F3@
+0 @I4@ INDI
+1 NAME Григорий /Орлов/
+2 GIVN Григорий
+2 SURN Орлов
+1 SEX M
+1 BIRT
+2 DATE 2 APR 1926
+1 FAMC @F2@
+0 @I5@ INDI
+1 NAME Нина /Волкова/
+2 GIVN Нина
+2 SURN Волкова
+1 SEX F
+1 BIRT
+2 DATE 1965
+1 FAMC @F1@
+0 @I6@ INDI
+1 NAME Павел /Соколов/
+2 GIVN Павел
+2 SURN Соколов
+1 SEX M
+1 BIRT
+2 DATE 1938
+1 FAMS @F4@
+0 @I7@ INDI
+1 NAME Зоя /Орлова/
+2 GIVN Зоя
+2 SURN Орлова
+1 SEX F
+1 BIRT
+2 DATE 1942
+1 FAMC @F3@
+1 FAMS @F1@
+1 FAMS @F4@
+0 @F1@ FAM
+1 WIFE @I7@
+1 CHIL @I5@
+0 @F2@ FAM
+1 MARR
+2 DATE 14 JUN 1925
+2 PLAC Тверь
+1 HUSB @I1@
+1 WIFE @I2@
+1 CHIL @I4@
+0 @F3@ FAM
+1 MARR
+2 DATE 1940
+1 HUSB @I1@
+1 WIFE @I3@
+1 CHIL @I7@
+0 @F4@ FAM
+1 MARR Y
+1 HUSB @I6@
+1 WIFE @I7@
+0 @SUB1@ SUBM
+1 NAME Иван Иванов
+0 TRLR

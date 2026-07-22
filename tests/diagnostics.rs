@@ -452,6 +452,230 @@ fn blank_and_padded_event_values_are_reported() {
     );
 }
 
+/// A mistyped id is the common way a reference goes wrong, so the diagnostic
+/// names the id that was probably meant instead of only saying "unknown".
+#[test]
+fn unknown_parent_id_names_the_closest_one() {
+    let cards = [
+        card("ivan-petrov", VALID_CARD),
+        card(
+            "anna-petrova",
+            "name: Анна\nsurname: Петрова\nsex: F\nfather: ivan-petroff\n",
+        ),
+    ];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("anna-petrova"),
+            Some("father"),
+            "no card with id ivan-petroff, did you mean ivan-petrov?"
+        )]
+    );
+}
+
+/// An id nothing resembles is a card that was never written rather than a
+/// typo, and naming the nearest stranger would only mislead.
+#[test]
+fn unknown_id_far_from_every_card_is_reported_on_its_own() {
+    let cards = [
+        card("ivan-petrov", VALID_CARD),
+        card(
+            "anna-petrova",
+            "name: Анна\nsurname: Петрова\nsex: F\nmother: zinaida-kuznetsova\n",
+        ),
+    ];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("anna-petrova"),
+            Some("mother"),
+            "no card with id zinaida-kuznetsova"
+        )]
+    );
+}
+
+#[test]
+fn reference_to_the_card_itself_is_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\nsurname: Петров\nsex: M\nfather: ivan-petrov\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("father"),
+            "must not be the card's own id"
+        )]
+    );
+}
+
+/// The compiler has to know which spouse is the husband to emit HUSB and
+/// WIFE, and a card naming a woman as `father` is a mix-up rather than a
+/// family whose shape the emitter should invent.
+#[test]
+fn parent_of_the_wrong_sex_is_reported() {
+    let cards = [
+        card("anna-petrova", "name: Анна\nsurname: Петрова\nsex: F\n"),
+        card("ivan-petrov", VALID_CARD),
+        card(
+            "olga-petrova",
+            "name: Ольга\nsurname: Петрова\nsex: F\nfather: anna-petrova\nmother: ivan-petrov\n",
+        ),
+    ];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(
+                Some("olga-petrova"),
+                Some("father"),
+                "anna-petrova has sex F, expected M"
+            ),
+            diagnostic(
+                Some("olga-petrova"),
+                Some("mother"),
+                "ivan-petrov has sex M, expected F"
+            ),
+        ]
+    );
+}
+
+#[test]
+fn spouse_of_the_same_sex_is_reported() {
+    let cards = [
+        card("ivan-petrov", VALID_CARD),
+        card(
+            "pyotr-petrov",
+            "name: Пётр\nsurname: Петров\nsex: M\nmarriage:\n  spouse: ivan-petrov\n",
+        ),
+    ];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("pyotr-petrov"),
+            Some("marriage.spouse"),
+            "ivan-petrov has sex M, expected F"
+        )]
+    );
+}
+
+/// A marriage belongs to one card. Declared on both, it is one fact kept in
+/// two places, which is what the card format exists to avoid.
+#[test]
+fn marriage_declared_on_both_cards_is_reported() {
+    let cards = [
+        card(
+            "anna-petrova",
+            "name: Анна\nsurname: Петрова\nsex: F\nmarriage:\n  spouse: ivan-petrov\n",
+        ),
+        card(
+            "ivan-petrov",
+            "name: Иван\nsurname: Петров\nsex: M\nmarriage:\n  spouse: anna-petrova\n  date: 1946\n",
+        ),
+    ];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("marriage"),
+            "also declared on anna-petrova's card, keep only one"
+        )]
+    );
+}
+
+/// Two people marrying the same third person is not a double declaration:
+/// those are two marriages, and each is declared once.
+#[test]
+fn two_marriages_to_the_same_person_are_accepted() {
+    let cards = [
+        card("ivan-petrov", VALID_CARD),
+        card(
+            "anna-petrova",
+            "name: Анна\nsurname: Петрова\nsex: F\nmarriage:\n  spouse: ivan-petrov\n",
+        ),
+        card(
+            "olga-petrova",
+            "name: Ольга\nsurname: Петрова\nsex: F\nmarriage:\n  spouse: ivan-petrov\n",
+        ),
+    ];
+    assert!(compile(CONFIG, &cards).is_ok());
+}
+
+/// The spouse is what makes the family, so a marriage block without one has
+/// nothing to synthesize from.
+#[test]
+fn marriage_without_a_spouse_is_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\nsurname: Петров\nsex: M\nmarriage:\n  date: 1946\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("marriage.spouse"),
+            "required field is missing"
+        )]
+    );
+}
+
+#[test]
+fn malformed_marriage_block_is_reported() {
+    let cards = [
+        card(
+            "ivan-petrov",
+            "name: Иван\nsurname: Петров\nsex: M\nmarriage: anna-petrova\n",
+        ),
+        card(
+            "pyotr-petrov",
+            "name: Пётр\nsurname: Петров\nsex: M\nmarriage:\n",
+        ),
+    ];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(
+                Some("ivan-petrov"),
+                Some("marriage"),
+                "expected a block with a spouse, and optionally a date and a place"
+            ),
+            diagnostic(
+                Some("pyotr-petrov"),
+                Some("marriage"),
+                "remove the key instead of leaving it empty"
+            ),
+        ]
+    );
+}
+
+#[test]
+fn unknown_key_inside_a_marriage_is_reported() {
+    let cards = [
+        card("anna-petrova", "name: Анна\nsurname: Петрова\nsex: F\n"),
+        card(
+            "ivan-petrov",
+            "name: Иван\nsurname: Петров\nsex: M\nmarriage:\n  spouse: anna-petrova\n  town: Тверь\n",
+        ),
+    ];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("marriage.town"),
+            "unknown key"
+        )]
+    );
+}
+
 #[test]
 fn unknown_card_key_is_reported() {
     let cards = [card(

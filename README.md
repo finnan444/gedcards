@@ -12,14 +12,9 @@ by hand, and safe to delete and rebuild.
 
 ## Status
 
-Early. Today a card carries a full name, a sex and birth/death events, and the
-compiler emits `INDI` records. Relationships (`father`/`mother`, marriages) and
-the synthesized `FAM` records are the next milestone — see
-[ADR 0001](docs/adr/0001-no-family-entities.md) for how families are meant to work.
-
-Because a file without a single `FAM` record has no relationships to draw, some
-viewers (Topola Viewer among them) will refuse to open the output until
-relationships land.
+Early. Today a card carries a full name, a sex, birth/death events and its
+relationships, and the compiler emits `INDI` and `FAM` records — enough for a
+tree a viewer can draw.
 
 ## Install
 
@@ -114,10 +109,44 @@ gedc build
 This writes `family.ged`. Output is byte-for-byte deterministic for the same input,
 so a rebuild produces no spurious diff.
 
+## Relationships
+
+A card names its parents by id, and one card of a married pair carries the
+`marriage`:
+
+```yaml
+name: Иван
+surname: Иванов
+sex: M
+father: pyotr-ivanov
+mother: maria-sidorova
+marriage:
+  spouse: anna-petrova
+  date: 1970-09-12
+  place: Тверь
+```
+
+`FAM` records are never authored: the compiler derives them, one per distinct
+(father, mother) pair — see [ADR 0001](docs/adr/0001-no-family-entities.md).
+Children naming the same pair land in the same family and get `FAMC`, the
+parents get `FAMS`, and a declared marriage becomes `MARR` with whatever date
+and place it carried. Remarriages need no special handling: another pairing is
+another pair, and so another `FAM`.
+
+Either parent may be left out — a child with only a known mother yields a family
+with one spouse. A `marriage` carrying neither date nor place is still worth
+writing: it is what pairs a childless couple.
+
+Children come out in birth order, the ones with no birth date last.
+
+The marriage goes on exactly one of the two cards; declaring it on both is a
+compile error. So is naming an id no card has — and because the usual cause is
+a typo, that diagnostic names the closest id there is.
+
 ## Ids
 
-An id is the card's file name without the extension, and it is what other cards will
-reference once relationships land. Use a latin transliteration — `ivan-ivanov`, and
+An id is the card's file name without the extension, and it is what `father`,
+`mother` and `spouse` reference. Use a latin transliteration — `ivan-ivanov`, and
 for namesakes a birth-year suffix, `pyotr-ivanov-1947`. Lowercase latin letters,
 digits and single inner hyphens only.
 
