@@ -12,10 +12,10 @@ by hand, and safe to delete and rebuild.
 
 ## Status
 
-Early. Today a card carries a full name and a sex, and the compiler emits
-`INDI` records. Relationships (`father`/`mother`, marriages) and the synthesized
-`FAM` records are the next milestone — see [ADR 0001](docs/adr/0001-no-family-entities.md)
-for how families are meant to work.
+Early. Today a card carries a full name, a sex and birth/death events, and the
+compiler emits `INDI` records. Relationships (`father`/`mother`, marriages) and
+the synthesized `FAM` records are the next milestone — see
+[ADR 0001](docs/adr/0001-no-family-entities.md) for how families are meant to work.
 
 Because a file without a single `FAM` record has no relationships to draw, some
 viewers (Topola Viewer among them) will refuse to open the output until
@@ -70,6 +70,40 @@ glued onto `name`.
 `surname` is always the surname at birth. A `married_surname` is emitted as `2 _MARNM`,
 the extension MyHeritage uses, which is what makes maiden names display correctly after
 import.
+
+## Dates and events
+
+`birth` and `death` are blocks carrying a `date`, a `place`, or both:
+
+```yaml
+name: Пётр
+surname: Иванов
+sex: M
+birth:
+  date: 1947-03-12
+  place: Тверь
+death:
+  place: Москва
+```
+
+A date is written as an ISO subset, optionally prefixed with an imprecision
+marker:
+
+| Card | GEDCOM |
+|---|---|
+| `1995-07-25` | `25 JUL 1995` |
+| `1995-07` | `JUL 1995` |
+| `1995` | `1995` |
+| `~1910` | `ABT 1910` |
+| `<1910` | `BEF 1910` |
+| `>1910` | `AFT 1910` |
+
+Anything else is a compile error. Precision the card does not state is never
+invented: a year-only date stays a year, and a place with no date is a perfectly
+good event.
+
+One YAML wrinkle: `>` starts a block scalar, so an after-date has to be quoted —
+`date: '>1910'`. The other five forms are written as they appear above.
 
 Run from that directory:
 

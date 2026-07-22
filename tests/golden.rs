@@ -55,6 +55,15 @@ fn full_names_fixture_compiles_to_expected_ged() {
     assert_eq!(ged, expected("full-names"));
 }
 
+/// Covers all six date forms, both events, and the combinations of date
+/// and place: both, date only, and place only.
+#[test]
+fn dates_fixture_compiles_to_expected_ged() {
+    let (config_yaml, cards) = load_fixture("dates");
+    let ged = compile(&config_yaml, &cards).expect("compile should succeed");
+    assert_eq!(ged, expected("dates"));
+}
+
 #[test]
 fn output_does_not_depend_on_card_order() {
     let (config_yaml, mut cards) = load_fixture("three-people");

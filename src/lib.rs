@@ -31,6 +31,14 @@ struct Config {
     language: String,
 }
 
+/// A life event. GEDCOM allows either part on its own, and a card with only
+/// a place is ordinary: the village is remembered when the year is not.
+struct Event {
+    /// Already in GEDCOM spelling — see `parse_date`.
+    date: Option<String>,
+    place: Option<String>,
+}
+
 struct Person {
     id: String,
     name: String,
@@ -40,6 +48,8 @@ struct Person {
     /// so maiden names keep displaying correctly after import.
     married_surname: Option<String>,
     sex: String,
+    birth: Option<Event>,
+    death: Option<Event>,
 }
 
 impl Person {
@@ -144,6 +154,17 @@ fn check_value(
     None
 }
 
+/// Everything below names a field by the path a diagnostic prints it as —
+/// `place` at the top level, `birth.place` inside an event block — while the
+/// mapping holding it is keyed by the last segment alone. `report_unknown_keys`
+/// takes the block name instead, because it finds its own leaf.
+fn key_of(field: &str) -> &str {
+    field
+        .rsplit('.')
+        .next()
+        .expect("rsplit yields at least one segment")
+}
+
 /// Pulls a required string field out of a parsed mapping, reporting
 /// a diagnostic (attributed to `card`, None for config) when absent
 /// or rejected by `check_value`. A key written with no value at all
@@ -154,7 +175,7 @@ fn take_string(
     card: Option<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
-    match mapping.remove(field) {
+    match mapping.remove(key_of(field)) {
         Some(serde_norway::Value::Null) | None => {
             diagnostics.push(Diagnostic {
                 card: card.map(String::from),
@@ -177,7 +198,7 @@ fn take_optional_string(
     card: Option<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<String> {
-    match mapping.remove(field)? {
+    match mapping.remove(key_of(field))? {
         serde_norway::Value::Null => {
             diagnostics.push(Diagnostic {
                 card: card.map(String::from),
@@ -191,9 +212,11 @@ fn take_optional_string(
 }
 
 /// Every key left in the mapping after the known ones were taken out
-/// is unknown; reported in sorted order for determinism.
+/// is unknown; reported in sorted order for determinism. `block` names the
+/// event block the keys sit in, so the reader is told which one to look at.
 fn report_unknown_keys(
     mapping: serde_norway::Mapping,
+    block: Option<&str>,
     card: Option<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -211,17 +234,137 @@ fn report_unknown_keys(
     for key in keys {
         diagnostics.push(Diagnostic {
             card: card.map(String::from),
-            field: Some(key),
+            field: Some(match block {
+                Some(block) => format!("{block}.{key}"),
+                None => key,
+            }),
             reason: "unknown key".to_string(),
         });
     }
+}
+
+const MONTHS: [&str; 12] = [
+    "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+];
+
+/// The imprecision markers a card date may carry, and how GEDCOM spells them.
+/// The GEDCOM spelling carries the space that separates it from the date.
+const MARKERS: [(char, &str); 3] = [('~', "ABT "), ('<', "BEF "), ('>', "AFT ")];
+
+const DATE_SYNTAX: &str =
+    "expected a date like 1995-07-25, 1995-07 or 1995, optionally prefixed with ~, < or >";
+
+/// Exactly two ASCII digits within `1..=max`. `str::parse` alone would not do:
+/// it accepts a leading `+` and a single digit.
+fn two_digits(text: &str, max: u8) -> Option<u8> {
+    if text.len() != 2 || !text.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let value: u8 = text.parse().ok()?;
+    (1..=max).contains(&value).then_some(value)
+}
+
+/// Turns a card date into the GEDCOM one. The card grammar is an ISO subset —
+/// `1995-07-25`, `1995-07`, `1995` — each optionally prefixed with `~`, `<`
+/// or `>`; anything else yields None. Precision missing from the card is never
+/// invented: a year-only date stays a year.
+///
+/// A day is only range-checked, not measured against its month: dates this old
+/// are as often Julian as Gregorian, and rejecting `1918-02-30` would mean
+/// picking a calendar the card never named.
+fn parse_date(text: &str) -> Option<String> {
+    let (marker, rest) = MARKERS
+        .iter()
+        .find_map(|(on_card, in_gedcom)| Some((*in_gedcom, text.strip_prefix(*on_card)?)))
+        .unwrap_or(("", text));
+
+    let mut parts = rest.split('-');
+    let year = parts.next().expect("split yields at least one segment");
+    let month = parts.next();
+    let day = parts.next();
+    // Four digits, and no year zero — neither calendar GEDCOM knows has one.
+    if parts.next().is_some()
+        || year.len() != 4
+        || !year.chars().all(|c| c.is_ascii_digit())
+        || year == "0000"
+    {
+        return None;
+    }
+
+    let month = match month {
+        Some(month) => MONTHS[usize::from(two_digits(month, 12)?) - 1],
+        None => return Some(format!("{marker}{year}")),
+    };
+    match day {
+        Some(day) => Some(format!("{marker}{} {month} {year}", two_digits(day, 31)?)),
+        None => Some(format!("{marker}{month} {year}")),
+    }
+}
+
+/// Like `take_optional_string`, but the value must also be a date, and it
+/// comes back in GEDCOM spelling.
+fn take_date(
+    mapping: &mut serde_norway::Mapping,
+    field: &str,
+    card: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<String> {
+    // A bare year is a YAML integer where every other form is a string, so it
+    // is read as one rather than made to carry quotes the author cannot guess.
+    if let Some(value) = mapping.get_mut(key_of(field))
+        && let Some(year) = value.as_i64()
+    {
+        *value = serde_norway::Value::String(year.to_string());
+    }
+    let text = take_optional_string(mapping, field, Some(card), diagnostics)?;
+    let date = parse_date(&text);
+    if date.is_none() {
+        diagnostics.push(Diagnostic {
+            card: Some(card.to_string()),
+            field: Some(field.to_string()),
+            reason: DATE_SYNTAX.to_string(),
+        });
+    }
+    date
+}
+
+/// Reads a `birth`/`death` block. Either part may be left out, but a block
+/// carrying neither says nothing and is a mistake rather than an empty event.
+fn take_event(
+    mapping: &mut serde_norway::Mapping,
+    field: &str,
+    card: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<Event> {
+    let reason = match mapping.remove(field)? {
+        serde_norway::Value::Mapping(mut block) if !block.is_empty() => {
+            let date = take_date(&mut block, &format!("{field}.date"), card, diagnostics);
+            let place = take_optional_string(
+                &mut block,
+                &format!("{field}.place"),
+                Some(card),
+                diagnostics,
+            );
+            report_unknown_keys(block, Some(field), Some(card), diagnostics);
+            return Some(Event { date, place });
+        }
+        serde_norway::Value::Mapping(_) => "needs a date or a place",
+        serde_norway::Value::Null => "remove the key instead of leaving it empty",
+        _ => "expected a block with a date and/or a place",
+    };
+    diagnostics.push(Diagnostic {
+        card: Some(card.to_string()),
+        field: Some(field.to_string()),
+        reason: reason.to_string(),
+    });
+    None
 }
 
 fn parse_config(config_yaml: &str, diagnostics: &mut Vec<Diagnostic>) -> Option<Config> {
     let mut mapping = parse_mapping(config_yaml, None, diagnostics)?;
     let submitter = take_string(&mut mapping, "submitter", None, diagnostics);
     let language = take_string(&mut mapping, "language", None, diagnostics);
-    report_unknown_keys(mapping, None, diagnostics);
+    report_unknown_keys(mapping, None, None, diagnostics);
     Some(Config {
         submitter: submitter?,
         language: language?,
@@ -269,7 +412,9 @@ fn parse_card(card: &Card, diagnostics: &mut Vec<Diagnostic>) -> Option<Person> 
             None
         }
     });
-    report_unknown_keys(mapping, Some(&card.id), diagnostics);
+    let birth = take_event(&mut mapping, "birth", &card.id, diagnostics);
+    let death = take_event(&mut mapping, "death", &card.id, diagnostics);
+    report_unknown_keys(mapping, None, Some(&card.id), diagnostics);
     if !id_is_slug {
         return None;
     }
@@ -280,7 +425,22 @@ fn parse_card(card: &Card, diagnostics: &mut Vec<Diagnostic>) -> Option<Person> 
         surname: surname?,
         married_surname,
         sex: sex?,
+        birth,
+        death,
     })
+}
+
+fn emit_event(ged: &mut String, tag: &str, event: Option<&Event>) {
+    let Some(event) = event else {
+        return;
+    };
+    ged.push_str(&format!("1 {tag}\n"));
+    if let Some(date) = &event.date {
+        ged.push_str(&format!("2 DATE {date}\n"));
+    }
+    if let Some(place) = &event.place {
+        ged.push_str(&format!("2 PLAC {place}\n"));
+    }
 }
 
 fn emit(config: &Config, people: &[Person]) -> String {
@@ -307,6 +467,10 @@ fn emit(config: &Config, people: &[Person]) -> String {
             ged.push_str(&format!("2 _MARNM {married_surname}\n"));
         }
         ged.push_str(&format!("1 SEX {}\n", person.sex));
+        // Name, sex, then events: the order the 5.5.1 INDIVIDUAL_RECORD
+        // grammar lists them in.
+        emit_event(&mut ged, "BIRT", person.birth.as_ref());
+        emit_event(&mut ged, "DEAT", person.death.as_ref());
     }
     ged.push_str(&format!("0 @SUB1@ SUBM\n1 NAME {}\n", config.submitter));
     ged.push_str("0 TRLR\n");

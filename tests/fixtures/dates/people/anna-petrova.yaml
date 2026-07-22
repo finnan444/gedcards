@@ -1,0 +1,8 @@
+name: Анна
+surname: Петрова
+sex: F
+birth:
+  date: 1995-07-25
+  place: Москва
+death:
+  place: Санкт-Петербург
