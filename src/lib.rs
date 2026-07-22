@@ -85,9 +85,9 @@ impl Person {
         }
     }
 
-    /// Where the person falls among their siblings, or None when the card
-    /// gives no birth date. The imprecision marker is ignored: `~1910` and
-    /// `1910` say the same thing about the order children were born in.
+    /// The birth date's numbers, or None when the card gives no birth date:
+    /// what siblings are ordered by. The imprecision marker is ignored, since
+    /// `~1910` and `1910` say the same thing about the order of births.
     fn birth_order(&self) -> Option<(u16, u8, u8)> {
         self.birth.as_ref()?.date.as_ref().map(|date| date.order)
     }
@@ -634,32 +634,25 @@ fn check_role(
     }
 }
 
-/// Turns the references on the cards into families. Nothing here is declared:
-/// a family is a unique (father, mother) pair, children are the cards naming
-/// that pair, and the marriage is whatever one of the two spouses wrote down —
-/// see docs/adr/0001-no-family-entities.md.
-///
-/// `people` is sorted by id, and the families come back in (father, mother)
-/// order, which is what makes the `@F1@` numbering independent of card order.
-fn link(people: &[Person], diagnostics: &mut Vec<Diagnostic>) -> Vec<Family> {
-    let by_id: HashMap<&str, &Person> = people
-        .iter()
-        .map(|person| (person.id.as_str(), person))
-        .collect();
-
+/// Checks every reference the cards make against the card it names.
+fn check_relationships(
+    by_id: &HashMap<&str, &Person>,
+    people: &[Person],
+    diagnostics: &mut Vec<Diagnostic>,
+) {
     for person in people {
         if let Some(father) = &person.father {
-            check_role(&by_id, person, "father", father, "M", diagnostics);
+            check_role(by_id, person, "father", father, "M", diagnostics);
         }
         if let Some(mother) = &person.mother {
-            check_role(&by_id, person, "mother", mother, "F", diagnostics);
+            check_role(by_id, person, "mother", mother, "F", diagnostics);
         }
         let Some(marriage) = &person.marriage else {
             continue;
         };
         let spouse_sex = if person.sex == "M" { "F" } else { "M" };
         check_role(
-            &by_id,
+            by_id,
             person,
             "marriage.spouse",
             &marriage.spouse,
@@ -683,6 +676,21 @@ fn link(people: &[Person], diagnostics: &mut Vec<Diagnostic>) -> Vec<Family> {
             });
         }
     }
+}
+
+/// Turns the references on the cards into families. Nothing here is declared:
+/// a family is a unique (father, mother) pair, children are the cards naming
+/// that pair, and the marriage is whatever one of the two spouses wrote down —
+/// see docs/adr/0001-no-family-entities.md.
+///
+/// `people` is sorted by id, and the families come back in (father, mother)
+/// order, which is what makes the `@F1@` numbering independent of card order.
+fn link(people: &[Person], diagnostics: &mut Vec<Diagnostic>) -> Vec<Family> {
+    let by_id: HashMap<&str, &Person> = people
+        .iter()
+        .map(|person| (person.id.as_str(), person))
+        .collect();
+    check_relationships(&by_id, people, diagnostics);
 
     let mut families: BTreeMap<(Option<&str>, Option<&str>), Family> = BTreeMap::new();
     for person in people {
@@ -732,7 +740,18 @@ fn emit_event(ged: &mut String, tag: &str, event: Option<&Event>) {
     let Some(event) = event else {
         return;
     };
-    ged.push_str(&format!("1 {tag}\n"));
+    // 5.5.1: "The occurrence of an event is asserted by the presence of either
+    // a DATE tag and value or a PLACe tag and value in the event structure.
+    // When neither the date value nor the place value are known then a Y(es)
+    // value on the parent event tag line is required to assert that the event
+    // happened." Only a marriage gets here bare — a birth or death block with
+    // neither part is refused on the card.
+    let asserted = if event.date.is_none() && event.place.is_none() {
+        " Y"
+    } else {
+        ""
+    };
+    ged.push_str(&format!("1 {tag}{asserted}\n"));
     if let Some(date) = &event.date {
         ged.push_str(&format!("2 DATE {}\n", date.gedcom));
     }

@@ -100,6 +100,15 @@ good event.
 One YAML wrinkle: `>` starts a block scalar, so an after-date has to be quoted —
 `date: '>1910'`. The other five forms are written as they appear above.
 
+Run from that directory:
+
+```bash
+gedc build
+```
+
+This writes `family.ged`. Output is byte-for-byte deterministic for the same input,
+so a rebuild produces no spurious diff.
+
 ## Relationships
 
 A card names its parents by id, and one card of a married pair carries the
@@ -133,15 +142,6 @@ Children come out in birth order, the ones with no birth date last.
 The marriage goes on exactly one of the two cards; declaring it on both is a
 compile error. So is naming an id no card has — and because the usual cause is
 a typo, that diagnostic names the closest id there is.
-
-Run from that directory:
-
-```bash
-gedc build
-```
-
-This writes `family.ged`. Output is byte-for-byte deterministic for the same input,
-so a rebuild produces no spurious diff.
 
 ## Ids
 
