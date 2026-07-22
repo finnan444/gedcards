@@ -6,3 +6,6 @@ birth:
 marriage:
   spouse: boris-orlov
   date: 1940
+  divorce:
+    date: 1955-08
+    place: Москва

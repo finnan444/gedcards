@@ -211,6 +211,24 @@ fn a_parent_is_named_from_the_cards_of_that_sex() {
     assert!(!schema.accepts("name: Ольга\nsurname: Петрова\nsex: F\nfather: pyotr-ivanov\n"));
 }
 
+/// A divorce is an event block like any other, except that carrying nothing
+/// is allowed: that the marriage ended is the whole fact.
+#[test]
+fn a_divorce_may_carry_nothing() {
+    let schema = Schema::of(&couple());
+    let with_divorce = |divorce: &str| {
+        format!("name: Иван\nsurname: Петров\nsex: M\nmarriage:\n  spouse: anna-petrova\n{divorce}")
+    };
+    assert!(schema.accepts(&with_divorce("  divorce:\n")));
+    assert!(schema.accepts(&with_divorce("  divorce: {}\n")));
+    assert!(schema.accepts(&with_divorce(
+        "  divorce:\n    date: 1981-04\n    place: Тверь\n"
+    )));
+    assert!(!schema.accepts(&with_divorce("  divorce:\n    date: 12.03.1981\n")));
+    assert!(!schema.accepts(&with_divorce("  divorce:\n    town: Тверь\n")));
+    assert!(!schema.accepts(&with_divorce("  divorce: 1981-04\n")));
+}
+
 /// Narrowing `spouse` by the card's own sex is a non-goal: every id is offered.
 #[test]
 fn a_spouse_is_any_card() {

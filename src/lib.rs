@@ -57,9 +57,14 @@ struct Event {
 
 /// A marriage as one card declares it. The other spouse's card says nothing:
 /// declaring it twice is one fact in two places, and a compile error.
+///
+/// The divorce nests here rather than sitting beside the marriage, so there is
+/// no writing one for a marriage that was never declared, and with remarriages
+/// no question which marriage ended — it is the one the block sits in.
 struct Marriage {
     spouse: String,
     event: Event,
+    divorce: Option<Event>,
 }
 
 struct Person {
@@ -104,6 +109,9 @@ struct Family {
     father: Option<String>,
     mother: Option<String>,
     marriage: Option<Event>,
+    /// Only ever set alongside `marriage`: a divorce is written inside the
+    /// block that declares the pair.
+    divorce: Option<Event>,
     /// In birth order — see `link`.
     children: Vec<String>,
 }
@@ -114,6 +122,7 @@ impl Family {
             father: father.map(String::from),
             mother: mother.map(String::from),
             marriage: None,
+            divorce: None,
             children: Vec::new(),
         }
     }
@@ -500,9 +509,49 @@ fn check_reference(
     None
 }
 
+/// Reads the `divorce` block nested in a marriage. Unlike `birth` and `death`,
+/// a block carrying nothing is not a mistake: that the marriage ended is the
+/// whole fact, and GEDCOM has a spelling for it. A `divorce:` with nothing
+/// after it says that same thing — YAML's other way of writing an empty
+/// mapping — rather than the absence that leaving the key out already means,
+/// which is why it is not refused the way an empty `birth:` is.
+fn take_divorce(
+    mapping: &mut serde_norway::Mapping,
+    card: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<Event> {
+    let reason = match mapping.remove("divorce")? {
+        serde_norway::Value::Null => {
+            return Some(Event {
+                date: None,
+                place: None,
+            });
+        }
+        serde_norway::Value::Mapping(mut block) => {
+            let date = take_date(&mut block, "marriage.divorce.date", card, diagnostics);
+            let place = take_optional_string(
+                &mut block,
+                "marriage.divorce.place",
+                Some(card),
+                diagnostics,
+            );
+            report_unknown_keys(block, Some("marriage.divorce"), Some(card), diagnostics);
+            return Some(Event { date, place });
+        }
+        _ => "expected a block with a date and/or a place, or nothing at all",
+    };
+    diagnostics.push(Diagnostic {
+        card: Some(card.to_string()),
+        field: Some("marriage.divorce".to_string()),
+        reason: reason.to_string(),
+    });
+    None
+}
+
 /// Reads a `marriage` block. The spouse is required — it is what the family
 /// is synthesized from — while the date and the place are not: that two people
-/// married is worth recording even when neither is known.
+/// married is worth recording even when neither is known. How it ended, if it
+/// did, is written inside it — see `take_divorce`.
 fn take_marriage(
     mapping: &mut serde_norway::Mapping,
     card: &str,
@@ -515,14 +564,16 @@ fn take_marriage(
                 .and_then(|id| check_reference(id, "marriage.spouse", card, ids, diagnostics));
             let date = take_date(&mut block, "marriage.date", card, diagnostics);
             let place = take_optional_string(&mut block, "marriage.place", Some(card), diagnostics);
+            let divorce = take_divorce(&mut block, card, diagnostics);
             report_unknown_keys(block, Some("marriage"), Some(card), diagnostics);
             return Some(Marriage {
                 spouse: spouse?,
                 event: Event { date, place },
+                divorce,
             });
         }
         serde_norway::Value::Null => "remove the key instead of leaving it empty",
-        _ => "expected a block with a spouse, and optionally a date and a place",
+        _ => "expected a block with a spouse, and optionally a date, a place and a divorce",
     };
     diagnostics.push(Diagnostic {
         card: Some(card.to_string()),
@@ -725,10 +776,9 @@ fn link(people: &[Person], diagnostics: &mut Vec<Diagnostic>) -> Vec<Family> {
         } else {
             (Some(marriage.spouse.as_str()), Some(person.id.as_str()))
         };
-        families
-            .entry(key)
-            .or_insert_with(|| Family::new(key))
-            .marriage = Some(marriage.event.clone());
+        let family = families.entry(key).or_insert_with(|| Family::new(key));
+        family.marriage = Some(marriage.event.clone());
+        family.divorce = marriage.divorce.clone();
     }
 
     for family in families.values_mut() {
@@ -754,8 +804,8 @@ fn emit_event(ged: &mut String, tag: &str, event: Option<&Event>) {
     // a DATE tag and value or a PLACe tag and value in the event structure.
     // When neither the date value nor the place value are known then a Y(es)
     // value on the parent event tag line is required to assert that the event
-    // happened." Only a marriage gets here bare — a birth or death block with
-    // neither part is refused on the card.
+    // happened." Only a marriage or a divorce gets here bare — a birth or
+    // death block with neither part is refused on the card.
     let asserted = if event.date.is_none() && event.place.is_none() {
         " Y"
     } else {
@@ -836,6 +886,9 @@ fn emit(config: &Config, people: &[Person], families: &[Family]) -> String {
         // The 5.5.1 FAM_RECORD grammar puts the family events ahead of the
         // links, the other way round from INDIVIDUAL_RECORD.
         emit_event(&mut ged, "MARR", family.marriage.as_ref());
+        // The grammar lets the family events come in any order; the marriage
+        // ahead of its end is the only one that reads.
+        emit_event(&mut ged, "DIV", family.divorce.as_ref());
         if let Some(father) = &family.father {
             ged.push_str(&format!("1 HUSB {}\n", xref[father.as_str()]));
         }

@@ -68,11 +68,30 @@ const MARRIAGE: &str = r##"    "marriage": {
 ///
 /// An event block carries a date, a place, or both — `minProperties` says
 /// "at least one of them", the two being all this block may hold.
+///
+/// The divorce inside a marriage is the one block that may hold neither, so it
+/// cannot point at that definition: `null` is the empty block written the short
+/// way, and both spellings assert the divorce on their own.
 const EPILOGUE: &str = r##"        "date": {
           "$ref": "#/definitions/date"
         },
         "place": {
           "type": "string"
+        },
+        "divorce": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "date": {
+              "$ref": "#/definitions/date"
+            },
+            "place": {
+              "type": "string"
+            }
+          }
         }
       }
     }
