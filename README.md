@@ -25,7 +25,9 @@ you don't have to.
   `did you mean pyotr-ivanov?`.
 - **UTF-8 throughout.** Cyrillic goes in and comes out unchanged, with `1 CHAR UTF-8`
   in the header.
-- **Small.** One direct dependency (`serde_norway`), 14 crates in the whole tree.
+- **Small.** One direct dependency (`serde_norway`), 14 crates in a release build. The
+  JSON Schema validator the tests check the schema with is a dev-dependency: it is built
+  by `just test`, never by `cargo install`.
 
 One card in:
 
@@ -69,6 +71,7 @@ birth:
 - [Relationships](#relationships)
 - [Ids](#ids)
 - [Errors](#errors)
+- [Editor completion](#editor-completion)
 - [Library](#library)
 - [Development](#development)
 - [License](#license)
@@ -254,10 +257,43 @@ error: pyotr-ivanov: age: unknown key
 
 ---
 
+## Editor completion
+
+`gedc schema` prints a [JSON Schema](https://json-schema.org) for the cards of the
+current tree, with the ids baked into it — `father` lists the men, `mother` the women,
+`marriage.spouse` everybody:
+
+```bash
+gedc schema > .vscode/people.schema.json
+```
+
+Point your editor at it. In VS Code, with the
+[YAML extension](https://marketplace.visualstudio.com/items?itemName=redhat.vscode-yaml),
+that is `.vscode/settings.json`:
+
+```json
+{
+  "yaml.schemas": {
+    "./.vscode/people.schema.json": "people/*.yaml"
+  }
+}
+```
+
+Typing `father:` now offers the ids there are, and a mistyped one, an unknown key, a
+`sex` that is neither `M` nor `F` or a date the compiler would refuse gets a squiggle
+where you typed it — rather than at the next build.
+
+> **The schema goes stale when you add a person.** JSON Schema cannot read the card
+> directory, which is why the ids have to be written into it; regenerate it when the
+> cast changes. The output is deterministic, so regenerating without a change produces
+> no diff.
+
+---
+
 ## Library
 
-The CLI is a thin wrapper over a single seam, which takes text and returns text —
-no filesystem involved, which is also how the tests drive it:
+The CLI is a thin wrapper over two seams, each taking text and returning text —
+no filesystem involved, which is also how the tests drive them:
 
 ```rust
 use gedcards::{Card, compile};
@@ -278,6 +314,9 @@ match compile(config, &cards) {
 }
 ```
 
+`gedcards::schema(&cards)` is the other half of it: the same cards in, the JSON Schema
+`gedc schema` prints out.
+
 ---
 
 ## Development
@@ -285,7 +324,7 @@ match compile(config, &cards) {
 ```bash
 just          # list recipes
 just build    # build the binary
-just test     # run the test suite (43 tests)
+just test     # run the test suite (57 tests)
 just lint     # rustfmt + clippy
 just check    # lint + test
 ```
