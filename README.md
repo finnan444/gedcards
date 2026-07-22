@@ -1,46 +1,110 @@
 # gedcards
 
-Compile per-person YAML cards into a [GEDCOM 5.5.1](https://gedcom.io/specifications/ged551.pdf) file.
+Write one small YAML file per person, keep the folder in git, and compile it into
+a [GEDCOM 5.5.1](https://gedcom.io/specifications/ged551.pdf) file that genealogy
+software imports. You never touch `.ged` syntax: no `@I42@` cross references to keep
+straight, no encoding roulette, and a diff that shows a person changing rather than
+a line number moving.
 
-Editing `.ged` by hand is unpleasant and risky: it is a line-oriented format held
-together by cross references like `@I42@`, and encodings are a recurring source of
-mojibake. `gedcards` lets you keep one readable YAML file per person under version
-control and compile them into a `.ged` that genealogy services accept.
+It is built for Slavic names in particular. A patronymic is its own field on the card,
+and a married surname is emitted so the maiden name still displays after import — two
+things GEDCOM 5.5.1 has no standard place for, and which this compiler decides once so
+you don't have to.
 
-The cards are the source of truth. The `.ged` is a derived artifact — never edited
-by hand, and safe to delete and rebuild.
+- **Cards are the source of truth.** The `.ged` is a derived artifact: never edited by
+  hand, safe to delete and rebuild.
+- **Slavic names are first-class.** `patronymic` is a separate field, joined into the
+  given name on the way out; `married_surname` becomes `_MARNM`, the extension
+  MyHeritage reads for a surname taken at marriage.
+- **Deterministic.** Byte-for-byte identical output for the same input, so a rebuild
+  produces no spurious diff. A golden test compiles the same cards in shuffled order
+  and asserts the bytes match.
+- **Every error in one run.** All problems are reported together, so you fix a batch
+  instead of one per rebuild — and when anything is wrong, nothing is written.
+- **Typos get a suggestion.** An unknown `father: pyotr-ivanof` answers with
+  `did you mean pyotr-ivanov?`.
+- **UTF-8 throughout.** Cyrillic goes in and comes out unchanged, with `1 CHAR UTF-8`
+  in the header.
+- **Small.** One direct dependency (`serde_norway`), 14 crates in the whole tree.
 
-## Status
+One card in:
 
-Early. Today a card carries a full name, a sex, birth/death events and its
-relationships, and the compiler emits `INDI` and `FAM` records — enough for a
-tree a viewer can draw.
+```yaml
+# people/maria-sidorova.yaml
+name: Мария
+patronymic: Петровна
+surname: Сидорова
+married_surname: Иванова
+sex: F
+birth:
+  date: ~1925
+```
 
-## Install
+`gedc build`, and that person in `family.ged`:
+
+```
+0 @I1@ INDI
+1 NAME Мария Петровна /Сидорова/
+2 GIVN Мария Петровна
+2 SURN Сидорова
+2 _MARNM Иванова
+1 SEX F
+1 BIRT
+2 DATE ABT 1925
+```
+
+> **Status: early.** A card carries a full name, a sex, birth and death events, and
+> its relationships; the compiler emits `INDI` and `FAM` records — enough for a tree
+> a viewer can draw. The output is written to the 5.5.1 spec, but it has not yet been
+> round-tripped through a real genealogy service, so treat import compatibility as
+> untested rather than promised.
+
+---
+
+## Contents
+
+- [Getting started](#getting-started)
+- [Names](#names)
+- [Dates and events](#dates-and-events)
+- [Relationships](#relationships)
+- [Ids](#ids)
+- [Errors](#errors)
+- [Library](#library)
+- [Development](#development)
+- [License](#license)
+
+---
+
+## Getting started
+
+**1. Install Rust** (1.85 or newer — the crate uses edition 2024), if you don't have it:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+**2. Install the `gedc` binary:**
 
 ```bash
 cargo install --git https://github.com/finnan444/gedcards
 ```
 
-## Use
+**3. Make a directory for your tree:**
 
-Lay out a directory like this:
-
-```
-tree.yaml
-people/
-  ivan-ivanov.yaml
-  maria-sidorova.yaml
+```bash
+mkdir -p my-tree/people
+cd my-tree
 ```
 
-`tree.yaml` holds what goes into the GEDCOM header:
+**4. Write `tree.yaml`** — it holds what goes into the GEDCOM header:
 
 ```yaml
 submitter: Иван Иванов
 language: Russian
 ```
 
-Each card is one person. The file name without its extension is that person's id:
+**5. Write one card per person in `people/`.** The file name without its extension is
+that person's id, so `people/ivan-ivanov.yaml` is the person `ivan-ivanov`:
 
 ```yaml
 name: Иван
@@ -48,7 +112,32 @@ surname: Иванов
 sex: M
 ```
 
-`patronymic` and `married_surname` are optional:
+**6. Build:**
+
+```bash
+gedc build
+```
+
+This writes `family.ged` next to `tree.yaml`, and prints how many people it wrote.
+Your directory now looks like this:
+
+```
+my-tree/
+  tree.yaml
+  family.ged      <- generated; add it to .gitignore
+  people/
+    ivan-ivanov.yaml
+```
+
+**7. Import `family.ged`** into whatever genealogy service or desktop app you use.
+Rebuild and re-import whenever the cards change — the `.ged` is disposable.
+
+---
+
+## Names
+
+`name`, `surname` and `sex` (`M` or `F`) are required. `patronymic` and
+`married_surname` are optional:
 
 ```yaml
 name: Мария
@@ -60,11 +149,14 @@ sex: F
 
 The patronymic is part of the name — it compiles to `1 NAME Мария Петровна /Сидорова/`
 with `2 GIVN Мария Петровна` — but it stays its own field on the card rather than being
-glued onto `name`.
+glued onto `name`. Why, and what the alternatives cost, is in
+[ADR 0002](docs/adr/0002-patronymic-joins-the-given-name.md).
 
 `surname` is always the surname at birth. A `married_surname` is emitted as `2 _MARNM`,
 the extension MyHeritage uses, which is what makes maiden names display correctly after
 import.
+
+---
 
 ## Dates and events
 
@@ -81,8 +173,7 @@ death:
   place: Москва
 ```
 
-A date is written as an ISO subset, optionally prefixed with an imprecision
-marker:
+A date is written as an ISO subset, optionally prefixed with an imprecision marker:
 
 | Card | GEDCOM |
 |---|---|
@@ -93,26 +184,18 @@ marker:
 | `<1910` | `BEF 1910` |
 | `>1910` | `AFT 1910` |
 
-Anything else is a compile error. Precision the card does not state is never
-invented: a year-only date stays a year, and a place with no date is a perfectly
+Anything else is a compile error. **Precision the card does not state is never
+invented:** a year-only date stays a year, and a place with no date is a perfectly
 good event.
 
-One YAML wrinkle: `>` starts a block scalar, so an after-date has to be quoted —
-`date: '>1910'`. The other five forms are written as they appear above.
+> One YAML wrinkle: `>` starts a block scalar, so an after-date has to be quoted —
+> `date: '>1910'`. The other five forms are written as they appear above.
 
-Run from that directory:
-
-```bash
-gedc build
-```
-
-This writes `family.ged`. Output is byte-for-byte deterministic for the same input,
-so a rebuild produces no spurious diff.
+---
 
 ## Relationships
 
-A card names its parents by id, and one card of a married pair carries the
-`marriage`:
+A card names its parents by id, and one card of a married pair carries the `marriage`:
 
 ```yaml
 name: Иван
@@ -128,39 +211,48 @@ marriage:
 
 `FAM` records are never authored: the compiler derives them, one per distinct
 (father, mother) pair — see [ADR 0001](docs/adr/0001-no-family-entities.md).
-Children naming the same pair land in the same family and get `FAMC`, the
-parents get `FAMS`, and a declared marriage becomes `MARR` with whatever date
-and place it carried. Remarriages need no special handling: another pairing is
-another pair, and so another `FAM`.
+Children naming the same pair land in the same family and get `FAMC`, the parents get
+`FAMS`, and a declared marriage becomes `MARR` with whatever date and place it carried.
+**Remarriages need no special handling:** another pairing is another pair, and so
+another `FAM`.
 
-Either parent may be left out — a child with only a known mother yields a family
-with one spouse. A `marriage` carrying neither date nor place is still worth
-writing: it is what pairs a childless couple.
+Either parent may be left out — a child with only a known mother yields a family with
+one spouse. A `marriage` carrying neither date nor place is still worth writing: it is
+what pairs a childless couple.
 
 Children come out in birth order, the ones with no birth date last.
 
-The marriage goes on exactly one of the two cards; declaring it on both is a
-compile error. So is naming an id no card has — and because the usual cause is
-a typo, that diagnostic names the closest id there is.
+The marriage goes on exactly one of the two cards; declaring it on both is a compile
+error. So is naming an id no card has.
+
+---
 
 ## Ids
 
-An id is the card's file name without the extension, and it is what `father`,
-`mother` and `spouse` reference. Use a latin transliteration — `ivan-ivanov`, and
-for namesakes a birth-year suffix, `pyotr-ivanov-1947`. Lowercase latin letters,
-digits and single inner hyphens only.
+An id is the card's file name without the extension, and it is what `father`, `mother`
+and `spouse` reference. Use a latin transliteration — `ivan-ivanov`, and for namesakes
+a birth-year suffix, `pyotr-ivanov-1947`. Lowercase latin letters, digits and single
+inner hyphens only.
+
+---
 
 ## Errors
 
-Every problem in the input is reported in one run, so you fix a batch at a time
-rather than one error per rebuild. When anything is wrong, nothing is written:
+Every problem in the input is reported in one run, so you fix a batch at a time rather
+than one error per rebuild. Because a mistyped id is the usual way a reference goes
+wrong, an unknown one names the closest id there is:
 
 ```
-error: иван: id must be a slug of lowercase latin letters, digits and hyphens
-error: иван: sex: expected M or F
-error: иван: age: unknown key
+error: ivan-ivanov: father: no card with id pyotr-ivanof, did you mean pyotr-ivanov?
+error: pyotr-ivanov: birth.date: expected a date like 1995-07-25, 1995-07 or 1995, optionally prefixed with ~, < or >
+error: pyotr-ivanov: age: unknown key
 3 problem(s) found, family.ged not written
 ```
+
+> **When anything is wrong, nothing is written.** A failed build leaves the previous
+> `family.ged` untouched, and exits non-zero.
+
+---
 
 ## Library
 
@@ -186,15 +278,25 @@ match compile(config, &cards) {
 }
 ```
 
+---
+
 ## Development
 
 ```bash
 just          # list recipes
 just build    # build the binary
-just test     # run the test suite
+just test     # run the test suite (43 tests)
 just lint     # rustfmt + clippy
 just check    # lint + test
 ```
+
+`just install-tools` installs the extra cargo subcommands `just lint` depends on, and
+`just install-hooks` installs the lefthook pre-push hook that runs `just check`.
+
+Design decisions that were expensive to make are written down in [docs/adr/](docs/adr/),
+and the background reading behind them in [docs/research/](docs/research/).
+
+---
 
 ## License
 
