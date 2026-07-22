@@ -1,6 +1,10 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 
+mod schema;
+
+pub use schema::schema;
+
 /// One person card: `id` is the card file name without extension,
 /// `yaml` is the raw file content.
 pub struct Card {
@@ -328,6 +332,9 @@ fn two_digits(text: &str, max: u8) -> Option<u8> {
 /// A day is only range-checked, not measured against its month: dates this old
 /// are as often Julian as Gregorian, and rejecting `1918-02-30` would mean
 /// picking a calendar the card never named.
+///
+/// This grammar has a twin: `schema` states it as a regex, so an editor can
+/// refuse a date before a build does. Change one and change the other.
 fn parse_date(text: &str) -> Option<Date> {
     let (marker, rest) = MARKERS
         .iter()
@@ -538,6 +545,9 @@ fn parse_config(config_yaml: &str, diagnostics: &mut Vec<Diagnostic>) -> Option<
 
 /// Ids are slugs per the project glossary: latin translit like
 /// `ivan-ivanov` or `pyotr-ivanov-1947`. Cyrillic is not allowed.
+///
+/// `schema` states this shape as a regex, for the tree that has no id to
+/// offer; change one and change the other.
 fn is_slug(id: &str) -> bool {
     !id.is_empty()
         && !id.starts_with('-')

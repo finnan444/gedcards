@@ -4,12 +4,13 @@ use std::process::ExitCode;
 
 use gedcards::Card;
 
-const USAGE: &str = "usage: gedc build\n\nReads people/*.yaml and tree.yaml from the current directory\nand writes family.ged (GEDCOM 5.5.1, UTF-8).";
+const USAGE: &str = "usage: gedc <build|schema>\n\nbuild   reads people/*.yaml and tree.yaml from the current directory\n        and writes family.ged (GEDCOM 5.5.1, UTF-8).\nschema  prints a JSON Schema for the cards in people/, so an editor can\n        complete and check the ids a card names:\n        gedc schema > .vscode/people.schema.json";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.as_slice() {
         [command] if command == "build" => build(),
+        [command] if command == "schema" => schema(),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)
@@ -53,6 +54,21 @@ fn build() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Writes the schema to stdout rather than to a file: where it belongs is the
+/// caller's business, since it is the editor's `yaml.schemas` that has to find
+/// it. No tree.yaml is read — the cards are all a schema is made of.
+fn schema() -> ExitCode {
+    let cards = match read_cards(Path::new("people")) {
+        Ok(cards) => cards,
+        Err(message) => {
+            eprintln!("error: {message}");
+            return ExitCode::FAILURE;
+        }
+    };
+    print!("{}", gedcards::schema(&cards));
+    ExitCode::SUCCESS
 }
 
 /// Reads every .yaml file in `dir` as a card, sorted by file name
