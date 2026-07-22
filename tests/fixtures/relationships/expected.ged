@@ -1,0 +1,68 @@
+0 HEAD
+1 SOUR gedc
+1 SUBM @SUB1@
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 LANG Russian
+0 @I1@ INDI
+1 NAME Анна /Иванова/
+2 GIVN Анна
+2 SURN Иванова
+1 SEX F
+1 BIRT
+2 DATE 2 MAR 1950
+1 FAMC @F1@
+0 @I2@ INDI
+1 NAME Иван /Иванов/
+2 GIVN Иван
+2 SURN Иванов
+1 SEX M
+1 BIRT
+2 DATE 3 AUG 1947
+1 FAMC @F1@
+0 @I3@ INDI
+1 NAME Мария Петровна /Сидорова/
+2 GIVN Мария Петровна
+2 SURN Сидорова
+2 _MARNM Иванова
+1 SEX F
+1 BIRT
+2 DATE 1925
+1 FAMS @F1@
+0 @I4@ INDI
+1 NAME Ольга /Иванова/
+2 GIVN Ольга
+2 SURN Иванова
+1 SEX F
+1 FAMC @F1@
+0 @I5@ INDI
+1 NAME Пётр /Иванов/
+2 GIVN Пётр
+2 SURN Иванов
+1 SEX M
+1 BIRT
+2 DATE 1920
+1 FAMS @F1@
+0 @I6@ INDI
+1 NAME Зоя /Иванова/
+2 GIVN Зоя
+2 SURN Иванова
+1 SEX F
+1 BIRT
+2 PLAC Тверь
+1 FAMC @F1@
+0 @F1@ FAM
+1 MARR
+2 DATE 9 MAY 1946
+2 PLAC Тверь
+1 HUSB @I5@
+1 WIFE @I3@
+1 CHIL @I2@
+1 CHIL @I1@
+1 CHIL @I4@
+1 CHIL @I6@
+0 @SUB1@ SUBM
+1 NAME Иван Иванов
+0 TRLR

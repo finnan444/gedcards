@@ -1,0 +1,8 @@
+name: Елена
+surname: Кузнецова
+sex: F
+birth:
+  date: 1915
+marriage:
+  spouse: boris-orlov
+  date: 1940

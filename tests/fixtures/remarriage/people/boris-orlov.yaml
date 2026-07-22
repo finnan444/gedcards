@@ -1,0 +1,9 @@
+name: Борис
+surname: Орлов
+sex: M
+birth:
+  date: 1900-02-11
+marriage:
+  spouse: daria-petrova
+  date: 1925-06-14
+  place: Тверь

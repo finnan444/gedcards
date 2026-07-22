@@ -64,10 +64,40 @@ fn dates_fixture_compiles_to_expected_ged() {
     assert_eq!(ged, expected("dates"));
 }
 
+/// One couple: the marriage declared on the husband's card, four children
+/// naming the pair, and the child order that follows from their birth dates
+/// rather than from their ids.
+#[test]
+fn relationships_fixture_compiles_to_expected_ged() {
+    let (config_yaml, cards) = load_fixture("relationships");
+    let ged = compile(&config_yaml, &cards).expect("compile should succeed");
+    assert_eq!(ged, expected("relationships"));
+}
+
+/// Covers the families that need no declaring at all: a second pairing with
+/// its own children, a child with only a mother, and a childless couple whose
+/// only reason to exist is the marriage — declared here from the wife's side.
+#[test]
+fn remarriage_fixture_compiles_to_expected_ged() {
+    let (config_yaml, cards) = load_fixture("remarriage");
+    let ged = compile(&config_yaml, &cards).expect("compile should succeed");
+    assert_eq!(ged, expected("remarriage"));
+}
+
 #[test]
 fn output_does_not_depend_on_card_order() {
     let (config_yaml, mut cards) = load_fixture("three-people");
     cards.reverse();
     let ged = compile(&config_yaml, &cards).expect("compile should succeed");
     assert_eq!(ged, expected("three-people"));
+}
+
+/// Families are collected as the cards are walked, so their numbering needs
+/// pinning against card order of its own.
+#[test]
+fn family_output_does_not_depend_on_card_order() {
+    let (config_yaml, mut cards) = load_fixture("remarriage");
+    cards.reverse();
+    let ged = compile(&config_yaml, &cards).expect("compile should succeed");
+    assert_eq!(ged, expected("remarriage"));
 }
