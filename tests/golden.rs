@@ -77,6 +77,8 @@ fn relationships_fixture_compiles_to_expected_ged() {
 /// Covers the families that need no declaring at all: a second pairing with
 /// its own children, a child with only a mother, and a childless couple whose
 /// only reason to exist is the marriage — declared here from the wife's side.
+/// Both shapes a divorce comes in ride along: one with a date and a place,
+/// one bare.
 #[test]
 fn remarriage_fixture_compiles_to_expected_ged() {
     let (config_yaml, cards) = load_fixture("remarriage");

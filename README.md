@@ -157,7 +157,8 @@ glued onto `name`. Why, and what the alternatives cost, is in
 
 `surname` is always the surname at birth. A `married_surname` is emitted as `2 _MARNM`,
 the extension MyHeritage uses, which is what makes maiden names display correctly after
-import.
+import. It is the surname taken at marriage, and a [divorce](#relationships) leaves it
+alone: whether the name was kept afterwards is not something the card says either way.
 
 ---
 
@@ -222,6 +223,23 @@ another `FAM`.
 Either parent may be left out — a child with only a known mother yields a family with
 one spouse. A `marriage` carrying neither date nor place is still worth writing: it is
 what pairs a childless couple.
+
+A marriage that ended carries a `divorce`, written inside it:
+
+```yaml
+marriage:
+  spouse: anna-petrova
+  date: 1970-09-12
+  place: Тверь
+  divorce:
+    date: 1981-04
+```
+
+That becomes `1 DIV` right after the `MARR`, with whatever date and place it carried —
+both optional, like the marriage's own. A bare `divorce:` says the marriage ended without
+saying when, and compiles to `1 DIV Y`. It nests rather than sitting beside the marriage
+so that with several marriages there is no question which one ended: the one the block is
+written in.
 
 Children come out in birth order, the ones with no birth date last.
 
@@ -324,7 +342,7 @@ match compile(config, &cards) {
 ```bash
 just          # list recipes
 just build    # build the binary
-just test     # run the test suite (57 tests)
+just test     # run the test suite (62 tests)
 just lint     # rustfmt + clippy
 just check    # lint + test
 ```

@@ -69,6 +69,21 @@
         },
         "place": {
           "type": "string"
+        },
+        "divorce": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "date": {
+              "$ref": "#/definitions/date"
+            },
+            "place": {
+              "type": "string"
+            }
+          }
         }
       }
     }

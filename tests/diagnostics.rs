@@ -645,7 +645,7 @@ fn malformed_marriage_block_is_reported() {
             diagnostic(
                 Some("ivan-petrov"),
                 Some("marriage"),
-                "expected a block with a spouse, and optionally a date and a place"
+                "expected a block with a spouse, and optionally a date, a place and a divorce"
             ),
             diagnostic(
                 Some("pyotr-petrov"),
@@ -671,6 +671,84 @@ fn unknown_key_inside_a_marriage_is_reported() {
         vec![diagnostic(
             Some("ivan-petrov"),
             Some("marriage.town"),
+            "unknown key"
+        )]
+    );
+}
+
+/// A divorce says the marriage it sits in ended. Saying nothing else about it
+/// is not a mistake — that is the whole fact, and `1 DIV Y` is how GEDCOM
+/// asserts it. Both of YAML's spellings for an empty block say the same thing.
+#[test]
+fn a_divorce_with_nothing_in_it_is_accepted() {
+    for divorce in ["  divorce:\n", "  divorce: {}\n"] {
+        let yaml = format!(
+            "name: Иван\nsurname: Петров\nsex: M\nmarriage:\n  spouse: anna-petrova\n{divorce}"
+        );
+        let cards = [
+            card("anna-petrova", "name: Анна\nsurname: Петрова\nsex: F\n"),
+            card("ivan-petrov", &yaml),
+        ];
+        let ged = compile(CONFIG, &cards).expect("compile should succeed");
+        assert!(ged.contains("1 DIV Y\n"), "for {divorce:?}");
+    }
+}
+
+#[test]
+fn unrecognized_divorce_date_is_reported() {
+    let cards = [
+        card("anna-petrova", "name: Анна\nsurname: Петрова\nsex: F\n"),
+        card(
+            "ivan-petrov",
+            "name: Иван\nsurname: Петров\nsex: M\nmarriage:\n  spouse: anna-petrova\n  divorce:\n    date: 12.03.1981\n",
+        ),
+    ];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("marriage.divorce.date"),
+            "expected a date like 1995-07-25, 1995-07 or 1995, optionally prefixed with ~, < or >"
+        )]
+    );
+}
+
+#[test]
+fn malformed_divorce_block_is_reported() {
+    let cards = [
+        card("anna-petrova", "name: Анна\nsurname: Петрова\nsex: F\n"),
+        card(
+            "ivan-petrov",
+            "name: Иван\nsurname: Петров\nsex: M\nmarriage:\n  spouse: anna-petrova\n  divorce: 1981-04\n",
+        ),
+    ];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("marriage.divorce"),
+            "expected a block with a date and/or a place, or nothing at all"
+        )]
+    );
+}
+
+#[test]
+fn unknown_key_inside_a_divorce_is_reported() {
+    let cards = [
+        card("anna-petrova", "name: Анна\nsurname: Петрова\nsex: F\n"),
+        card(
+            "ivan-petrov",
+            "name: Иван\nsurname: Петров\nsex: M\nmarriage:\n  spouse: anna-petrova\n  divorce:\n    town: Тверь\n",
+        ),
+    ];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("marriage.divorce.town"),
             "unknown key"
         )]
     );
