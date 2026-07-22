@@ -1,0 +1,47 @@
+0 HEAD
+1 SOUR gedc
+1 SUBM @SUB1@
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 LANG Russian
+0 @I1@ INDI
+1 NAME Анна /Петрова/
+2 GIVN Анна
+2 SURN Петрова
+1 SEX F
+1 BIRT
+2 DATE 25 JUL 1995
+2 PLAC Москва
+1 DEAT
+2 PLAC Санкт-Петербург
+0 @I2@ INDI
+1 NAME Борис /Орлов/
+2 GIVN Борис
+2 SURN Орлов
+1 SEX M
+1 BIRT
+2 DATE ABT 1910
+1 DEAT
+2 DATE BEF 1980
+0 @I3@ INDI
+1 NAME Дарья /Орлова/
+2 GIVN Дарья
+2 SURN Орлова
+1 SEX F
+1 BIRT
+2 DATE JUN 1930
+2 PLAC Тверь
+1 DEAT
+2 DATE AFT 1990
+0 @I4@ INDI
+1 NAME Пётр /Иванов/
+2 GIVN Пётр
+2 SURN Иванов
+1 SEX M
+1 BIRT
+2 DATE 1947
+0 @SUB1@ SUBM
+1 NAME Иван Иванов
+0 TRLR

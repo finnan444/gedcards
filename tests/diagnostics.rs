@@ -313,6 +313,145 @@ fn config_and_card_problems_accumulate_in_one_run() {
     );
 }
 
+/// The date grammar is a closed set of six forms. Anything else is refused
+/// rather than guessed at, including forms a reader might think obvious:
+/// a two-digit year, a day-first date, and a month out of range.
+#[test]
+fn unrecognized_dates_are_reported() {
+    for date in [
+        "25.07.1995",
+        "25 JUL 1995",
+        "95-07-25",
+        "1995-7-25",
+        "1995-13",
+        "1995-07-32",
+        "1995-00",
+        "about 1910",
+        "1995-07-25-01",
+        "0000",
+    ] {
+        let yaml = format!("name: Иван\nsurname: Петров\nsex: M\nbirth:\n  date: '{date}'\n");
+        let cards = [card("ivan-petrov", &yaml)];
+        let diagnostics = compile(CONFIG, &cards).unwrap_err();
+        assert_eq!(
+            diagnostics,
+            vec![diagnostic(
+                Some("ivan-petrov"),
+                Some("birth.date"),
+                "expected a date like 1995-07-25, 1995-07 or 1995, optionally prefixed with ~, < or >"
+            )],
+            "for {date:?}"
+        );
+    }
+}
+
+/// Every date form, including the ones YAML hands over as something other
+/// than a string, reaches the compiler intact.
+#[test]
+fn every_date_form_is_accepted() {
+    for date in ["1995-07-25", "1995-07", "1995", "~1910", "<1910", "'>1910'"] {
+        let yaml = format!("name: Иван\nsurname: Петров\nsex: M\ndeath:\n  date: {date}\n");
+        let cards = [card("ivan-petrov", &yaml)];
+        assert!(compile(CONFIG, &cards).is_ok(), "for {date:?}");
+    }
+}
+
+#[test]
+fn non_mapping_event_is_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\nsurname: Петров\nsex: M\nbirth: 1995-07-25\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("birth"),
+            "expected a block with a date and/or a place"
+        )]
+    );
+}
+
+/// An event with neither part says nothing, and would emit a bare `1 BIRT`.
+#[test]
+fn empty_event_block_is_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\nsurname: Петров\nsex: M\nbirth: {}\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("birth"),
+            "needs a date or a place"
+        )]
+    );
+}
+
+#[test]
+fn valueless_event_key_is_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\nsurname: Петров\nsex: M\ndeath:\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("death"),
+            "remove the key instead of leaving it empty"
+        )]
+    );
+}
+
+/// Keys inside an event block are checked like any others, and the
+/// diagnostic names the full path so it is clear which block they sit in.
+#[test]
+fn unknown_key_inside_an_event_is_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\nsurname: Петров\nsex: M\nbirth:\n  date: 1995\n  city: Москва\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("birth.city"),
+            "unknown key"
+        )]
+    );
+}
+
+/// The rules that hold for top-level values hold inside an event block too.
+#[test]
+fn blank_and_padded_event_values_are_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\nsurname: Петров\nsex: M\nbirth:\n  date: ' 1995'\n  place: ''\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![
+            diagnostic(
+                Some("ivan-petrov"),
+                Some("birth.date"),
+                "must not have leading or trailing whitespace"
+            ),
+            diagnostic(
+                Some("ivan-petrov"),
+                Some("birth.place"),
+                "must not be empty"
+            ),
+        ]
+    );
+}
+
 #[test]
 fn unknown_card_key_is_reported() {
     let cards = [card(

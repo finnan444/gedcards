@@ -1,0 +1,8 @@
+name: Дарья
+surname: Орлова
+sex: F
+birth:
+  date: 1930-06
+  place: Тверь
+death:
+  date: '>1990'
