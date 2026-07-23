@@ -166,7 +166,8 @@ alone: whether the name was kept afterwards is not something the card says eithe
 ## Dates and events
 
 `birth`, `death` and `burial` are blocks carrying a `date`, a `place`, or both.
-A `death` may also carry an `age` at death and a `cause`:
+Any of them may also carry `coords` — a pin on the place — and a `note`, and a
+`death` an `age` at death and a `cause`:
 
 ```yaml
 name: Пётр
@@ -182,12 +183,22 @@ death:
   cause: Stroke
 burial:
   place: Николо-Архангельское кладбище
+  coords: 55.7314, 37.9256
+  note: участок 42, у главной аллеи слева
 ```
 
 `age` and `cause` are GEDCOM's event details (`2 AGE`, `2 CAUS`); they read
 naturally on a death, and a death carrying only them, with no date or place,
 compiles to `1 DEAT Y` with the details beneath. A `burial` is the same event
 block as `birth` and `death`, emitted as `BURI`.
+
+`coords` are a latitude and longitude in decimal degrees, `latitude, longitude`,
+each optionally negative for the southern or western hemisphere. They compile to
+GEDCOM's `3 MAP` under the place, with `4 LATI` and `4 LONG` spelled the way the
+standard wants — a hemisphere letter and the degrees, `N55.7314` / `E37.9256`.
+Because `MAP` nests inside `PLAC`, coordinates need a `place` to sit under; a pin
+on its own is a compile error. A `note` is the free line for what no field holds —
+how to find a grave, say — emitted as `2 NOTE`.
 
 A date is written as an ISO subset, optionally prefixed with an imprecision marker:
 
@@ -297,7 +308,8 @@ the year is unknown or shared. The scheme, and why it is not GOST or ICAO, is in
 
 > **Import reads back what a card can hold, and names the rest.** It reads the name
 > (`NAME` with `GIVN`, `SURN` and `_MARNM`) and `SEX`; the `BIRT`, `DEAT` and `BURI`
-> events with their dates, places, ages and causes; and the `FAM` records — a family's
+> events with their dates, places, coordinates, notes, ages and causes; and the `FAM`
+> records — a family's
 > `HUSB` and `WIFE` become the `father` and `mother` on each child's card, and its
 > `MARR`/`DIV` become a `marriage` block on one spouse's. A tag with no card field yet
 > (a name piece like `NPFX`, a `SOUR` citation, an `OCCU`) is not dropped silently — it

@@ -220,6 +220,63 @@ marriage:\n  spouse: petrova-anna\n  date: 1970\n  divorce:\n"
     );
 }
 
+/// A burial's coordinates and note read back into the card: `MAP` nested under
+/// `PLAC` becomes the `coords` pair, the hemisphere letters turning into signs
+/// (S and W negative), and `NOTE` becomes the free line.
+#[test]
+fn burial_coordinates_and_note_import() {
+    let ged = format!(
+        "{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Роальд /Амундсен/\n\
+2 GIVN Роальд\n\
+2 SURN Амундсен\n\
+1 SEX M\n\
+1 BURI\n\
+2 PLAC Ушуайя\n\
+3 MAP\n\
+4 LATI S54.8\n\
+4 LONG W68.3\n\
+2 NOTE у флагштока\n\
+{SUBMITTER}"
+    );
+    let (_, cards) = import(&ged, None).expect("import should succeed");
+    assert_eq!(cards.len(), 1);
+    assert_eq!(
+        cards[0].yaml,
+        "name: Роальд\nsurname: Амундсен\nsex: M\n\
+burial:\n  place: Ушуайя\n  coords: -54.8, -68.3\n  note: у флагштока\n"
+    );
+}
+
+/// GEDCOM requires both a LATI and a LONG under a MAP; a half-written pin cannot
+/// become a card's coords, so it is named rather than dropped.
+#[test]
+fn a_map_missing_a_coordinate_is_reported() {
+    let ged = format!(
+        "{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Иван /Иванов/\n\
+2 GIVN Иван\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+1 BURI\n\
+2 PLAC Тверь\n\
+3 MAP\n\
+4 LATI N56.86\n\
+{SUBMITTER}"
+    );
+    let diagnostics = import(&ged, None).err().unwrap();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("@I1@"),
+            None,
+            "BURI MAP needs both a LATI and a LONG to import"
+        )]
+    );
+}
+
 /// Two people who share a name and a birth year both keep it: the first takes the
 /// bare slug, the namesake the birth-year suffix the README's ids use.
 #[test]

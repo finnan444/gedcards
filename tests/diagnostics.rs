@@ -368,7 +368,7 @@ fn non_mapping_event_is_reported() {
         vec![diagnostic(
             Some("ivan-petrov"),
             Some("birth"),
-            "expected a block with a date, a place, an age and/or a cause"
+            "expected a block with a date, a place, a note, an age and/or a cause"
         )]
     );
 }
@@ -386,7 +386,7 @@ fn empty_event_block_is_reported() {
         vec![diagnostic(
             Some("ivan-petrov"),
             Some("birth"),
-            "needs a date, a place, an age or a cause"
+            "needs a date, a place, a note, an age or a cause"
         )]
     );
 }
@@ -449,6 +449,47 @@ fn blank_and_padded_event_values_are_reported() {
                 "must not be empty"
             ),
         ]
+    );
+}
+
+/// Coordinates are a `latitude, longitude` pair of decimal degrees; a value in
+/// any other shape, or one out of the degree bounds, is reported.
+#[test]
+fn malformed_coords_are_reported() {
+    for coords in ["55.7314 37.9256", "north, east", "91, 0", "0, 181"] {
+        let yaml = format!(
+            "name: Иван\nsurname: Петров\nsex: M\nburial:\n  place: Тверь\n  coords: {coords}\n"
+        );
+        let cards = [card("ivan-petrov", &yaml)];
+        let diagnostics = compile(CONFIG, &cards).unwrap_err();
+        assert_eq!(
+            diagnostics,
+            vec![diagnostic(
+                Some("ivan-petrov"),
+                Some("burial.coords"),
+                "expected a latitude and longitude in degrees, like 55.7314, 37.9256"
+            )],
+            "for {coords:?}"
+        );
+    }
+}
+
+/// GEDCOM hangs coordinates off a place — MAP nests inside PLAC — so a pin with
+/// no place has no line to sit on and is reported.
+#[test]
+fn coords_without_a_place_are_reported() {
+    let cards = [card(
+        "ivan-petrov",
+        "name: Иван\nsurname: Петров\nsex: M\nburial:\n  coords: 55.7314, 37.9256\n",
+    )];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("ivan-petrov"),
+            Some("burial.coords"),
+            "needs a place for the coordinates to sit under"
+        )]
     );
 }
 

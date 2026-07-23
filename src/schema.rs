@@ -69,11 +69,14 @@ const MARRIAGE: &str = r##"    "marriage": {
 /// since that is what YAML reads `1995` as — of four digits, because an
 /// integer reaches the compiler through `to_string`, where `0001` is `1`.
 ///
-/// An event block carries a date, a place, or both, and on a death an `age`
-/// and a `cause` besides — `minProperties` says "at least one of them", the
-/// four being all this block may hold. `age` is a string or an integer, since
-/// a bare `age: 75` reads as a YAML integer the compiler coerces, the way a
-/// bare year does.
+/// An event block carries a date, a place, or both, and besides them a `note`,
+/// a pin on the place as `coords`, and on a death an `age` and a `cause` —
+/// `minProperties` says "at least one of them". `age` is a string or an integer,
+/// since a bare `age: 75` reads as a YAML integer the compiler coerces, the way a
+/// bare year does. The `coords` pattern is `parse_coords`'s shape: two decimal
+/// degrees, each optionally negative, comma-separated. Their degree bounds, and
+/// that they need a place to sit under, are the compiler's to check — a regex for
+/// either earns less than it costs.
 ///
 /// The divorce inside a marriage is the one block that may hold neither, so it
 /// cannot point at that definition: `null` is the empty block written the short
@@ -125,6 +128,13 @@ const EPILOGUE: &str = r##"        "date": {
           "$ref": "#/definitions/date"
         },
         "place": {
+          "type": "string"
+        },
+        "coords": {
+          "type": "string",
+          "pattern": "^-?[0-9]+(\\.[0-9]+)?, *-?[0-9]+(\\.[0-9]+)?$"
+        },
+        "note": {
           "type": "string"
         },
         "age": {

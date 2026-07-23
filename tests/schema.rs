@@ -189,6 +189,21 @@ fn an_event_needs_a_date_or_a_place() {
     assert!(!schema.accepts("name: Иван\nsurname: Петров\nsex: M\nbirth: 1947\n"));
 }
 
+/// `coords` follow the pair shape the compiler parses; a `note` is any string.
+/// The degree bounds are the compiler's to check, so the schema takes the shape
+/// alone — an editor still catches the common slips.
+#[test]
+fn coords_and_note_follow_the_event_grammar() {
+    let schema = Schema::of(&couple());
+    let event = |body: &str| format!("name: Иван\nsurname: Петров\nsex: M\nburial:\n{body}");
+    assert!(schema.accepts(&event("  place: Тверь\n  coords: 55.7314, 37.9256\n")));
+    assert!(schema.accepts(&event("  place: Тверь\n  coords: -55.7314, -37.9256\n")));
+    assert!(schema.accepts(&event("  place: Тверь\n  note: у главной аллеи слева\n")));
+    // Not a pair, or not numbers at all.
+    assert!(!schema.accepts(&event("  place: Тверь\n  coords: 55.7314\n")));
+    assert!(!schema.accepts(&event("  place: Тверь\n  coords: north, east\n")));
+}
+
 #[test]
 fn a_marriage_needs_a_spouse() {
     let schema = Schema::of(&couple());
