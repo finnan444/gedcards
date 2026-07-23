@@ -49,8 +49,20 @@ struct Date {
     order: (u16, u8, u8),
 }
 
+/// A geographic pin: latitude and longitude already in GEDCOM's spelling — a
+/// hemisphere letter and the degrees, `N55.7314` / `E37.9256` — see `parse_coords`.
+#[derive(Clone)]
+struct Coords {
+    lati: String,
+    long: String,
+}
+
 /// A life event. GEDCOM allows either part on its own, and a card with only
 /// a place is ordinary: the village is remembered when the year is not.
+///
+/// `coords` pin the `place` down — GEDCOM's MAP nests inside PLAC, so they ride
+/// along with a place and are meaningless without one. A `note` is the freeform
+/// line for what no field holds — how to find a grave, say.
 ///
 /// `age` and `cause` are GEDCOM's EVENT_DETAIL, valid under any event; a card
 /// only ever writes them on `death`, where they read as an age at and a cause
@@ -59,6 +71,8 @@ struct Date {
 struct Event {
     date: Option<Date>,
     place: Option<String>,
+    coords: Option<Coords>,
+    note: Option<String>,
     age: Option<String>,
     cause: Option<String>,
 }
@@ -332,6 +346,8 @@ const MARKERS: [(char, &str); 3] = [('~', "ABT "), ('<', "BEF "), ('>', "AFT ")]
 const DATE_SYNTAX: &str =
     "expected a date like 1995-07-25, 1995-07 or 1995, optionally prefixed with ~, < or >";
 
+const COORDS_SYNTAX: &str = "expected a latitude and longitude in degrees, like 55.7314, 37.9256";
+
 /// Exactly two ASCII digits within `1..=max`. `str::parse` alone would not do:
 /// it accepts a leading `+` and a single digit.
 fn two_digits(text: &str, max: u8) -> Option<u8> {
@@ -431,6 +447,62 @@ fn take_date(
     date
 }
 
+/// Turns a card's `55.7314, 37.9256` into GEDCOM's `N55.7314` / `E37.9256`: two
+/// decimal degrees, comma-separated, each optionally negative, the sign becoming
+/// the hemisphere letter — N/S for latitude, E/W for longitude — the way
+/// PLACE_LATITUDE and PLACE_LONGITUDE spell it. Latitude is within 90 degrees of
+/// the equator, longitude within 180 of the meridian; anything else yields None.
+///
+/// This grammar has a twin: `schema` states its shape as a regex. The degree
+/// bounds live here alone, the way `parse_date`'s year-zero rule does — a regex
+/// for them earns less than it costs.
+fn parse_coords(text: &str) -> Option<Coords> {
+    let (lat, lon) = text.split_once(',')?;
+    Some(Coords {
+        lati: degree(lat.trim(), 90, 'N', 'S')?,
+        long: degree(lon.trim(), 180, 'E', 'W')?,
+    })
+}
+
+/// One coordinate as GEDCOM spells it: the hemisphere letter for its sign, then
+/// the magnitude verbatim — the card's digits are kept as written rather than
+/// reparsed, so the coordinate reads the same on the card and in the file. None
+/// when it is not a plain decimal within `limit` degrees.
+fn degree(text: &str, limit: u16, positive: char, negative: char) -> Option<String> {
+    let (hemisphere, magnitude) = match text.strip_prefix('-') {
+        Some(rest) => (negative, rest),
+        None => (positive, text),
+    };
+    // A plain decimal: digits with at most one dot, and a digit at each end.
+    // `f64::parse` alone would take `inf`, `1e3`, `5.` or a leading sign.
+    let plain = magnitude.matches('.').count() <= 1
+        && magnitude.starts_with(|c: char| c.is_ascii_digit())
+        && magnitude.ends_with(|c: char| c.is_ascii_digit())
+        && magnitude.chars().all(|c| c.is_ascii_digit() || c == '.');
+    let value: f64 = plain.then(|| magnitude.parse().ok()).flatten()?;
+    (value <= f64::from(limit)).then(|| format!("{hemisphere}{magnitude}"))
+}
+
+/// Like `take_date`, but the value must be a `latitude, longitude` pair, and it
+/// comes back in GEDCOM spelling.
+fn take_coords(
+    mapping: &mut serde_norway::Mapping,
+    field: &str,
+    card: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<Coords> {
+    let text = take_optional_string(mapping, field, Some(card), diagnostics)?;
+    let coords = parse_coords(&text);
+    if coords.is_none() {
+        diagnostics.push(Diagnostic {
+            card: Some(card.to_string()),
+            field: Some(field.to_string()),
+            reason: COORDS_SYNTAX.to_string(),
+        });
+    }
+    coords
+}
+
 /// Reads a `birth`/`death`/`burial` block. Every part may be left out, but a
 /// block carrying nothing says nothing and is a mistake rather than an empty
 /// event. `age` and `cause` are the death's extras — GEDCOM's EVENT_DETAIL —
@@ -450,6 +522,23 @@ fn take_event(
                 Some(card),
                 diagnostics,
             );
+            let coords = take_coords(&mut block, &format!("{field}.coords"), card, diagnostics);
+            // MAP nests inside PLAC, so a pin has no line to sit on without a
+            // place. Only flagged once the coordinates themselves parsed — a
+            // malformed pair already carries its own diagnostic.
+            if coords.is_some() && place.is_none() {
+                diagnostics.push(Diagnostic {
+                    card: Some(card.to_string()),
+                    field: Some(format!("{field}.coords")),
+                    reason: "needs a place for the coordinates to sit under".to_string(),
+                });
+            }
+            let note = take_optional_string(
+                &mut block,
+                &format!("{field}.note"),
+                Some(card),
+                diagnostics,
+            );
             coerce_integer_to_string(&mut block, "age");
             let age =
                 take_optional_string(&mut block, &format!("{field}.age"), Some(card), diagnostics);
@@ -463,13 +552,15 @@ fn take_event(
             return Some(Event {
                 date,
                 place,
+                coords,
+                note,
                 age,
                 cause,
             });
         }
-        serde_norway::Value::Mapping(_) => "needs a date, a place, an age or a cause",
+        serde_norway::Value::Mapping(_) => "needs a date, a place, a note, an age or a cause",
         serde_norway::Value::Null => "remove the key instead of leaving it empty",
-        _ => "expected a block with a date, a place, an age and/or a cause",
+        _ => "expected a block with a date, a place, a note, an age and/or a cause",
     };
     diagnostics.push(Diagnostic {
         card: Some(card.to_string()),
@@ -556,6 +647,8 @@ fn take_divorce(
             return Some(Event {
                 date: None,
                 place: None,
+                coords: None,
+                note: None,
                 age: None,
                 cause: None,
             });
@@ -572,6 +665,8 @@ fn take_divorce(
             return Some(Event {
                 date,
                 place,
+                coords: None,
+                note: None,
                 age: None,
                 cause: None,
             });
@@ -609,6 +704,8 @@ fn take_marriage(
                 event: Event {
                     date,
                     place,
+                    coords: None,
+                    note: None,
                     age: None,
                     cause: None,
                 },
@@ -862,6 +959,13 @@ fn emit_event(ged: &mut String, tag: &str, event: Option<&Event>) {
     }
     if let Some(place) = &event.place {
         ged.push_str(&format!("2 PLAC {place}\n"));
+        // MAP is a child of PLAC — see PLACE_STRUCTURE — with LATI and LONG
+        // beneath it. A pin only ever reaches here alongside its place.
+        if let Some(coords) = &event.coords {
+            ged.push_str("3 MAP\n");
+            ged.push_str(&format!("4 LATI {}\n", coords.lati));
+            ged.push_str(&format!("4 LONG {}\n", coords.long));
+        }
     }
     // AGE and CAUS come after DATE and PLAC, the order a MyHeritage export
     // writes them in. A marriage or divorce never carries them.
@@ -870,6 +974,10 @@ fn emit_event(ged: &mut String, tag: &str, event: Option<&Event>) {
     }
     if let Some(cause) = &event.cause {
         ged.push_str(&format!("2 CAUS {cause}\n"));
+    }
+    // NOTE closes the event detail, the order the 5.5.1 grammar lists it in.
+    if let Some(note) = &event.note {
+        ged.push_str(&format!("2 NOTE {note}\n"));
     }
 }
 

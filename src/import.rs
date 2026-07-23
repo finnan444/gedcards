@@ -1,6 +1,7 @@
 //! The inverse of `compile`: a GEDCOM 5.5.1 file in, `tree.yaml` and one card
 //! per `INDI` out. What a card has a field for is read back — the name and sex,
-//! the birth, death and burial events with their dates, places, ages and causes,
+//! the birth, death and burial events with their dates, places, coordinates,
+//! notes, ages and causes,
 //! and the relationships the `FAM` records hold: parents, marriages and divorces.
 //! A tag with no card field yet (a name piece like `NPFX`, a `SOUR` citation) is
 //! not dropped silently but named, so the next `gedc build` cannot quietly lose
@@ -40,6 +41,8 @@ struct Line<'a> {
 struct RawEvent {
     date: Option<String>,
     place: Option<String>,
+    coords: Option<String>,
+    note: Option<String>,
     age: Option<String>,
     cause: Option<String>,
 }
@@ -49,7 +52,12 @@ impl RawEvent {
     /// asserts an event with no data a card can hold, so import skips it rather
     /// than writing an empty block the compiler would reject.
     fn is_empty(&self) -> bool {
-        self.date.is_none() && self.place.is_none() && self.age.is_none() && self.cause.is_none()
+        self.date.is_none()
+            && self.place.is_none()
+            && self.coords.is_none()
+            && self.note.is_none()
+            && self.age.is_none()
+            && self.cause.is_none()
     }
 }
 
@@ -259,7 +267,7 @@ fn read_individual<'a>(body: &'a [Line], diagnostics: &mut Vec<Diagnostic>) -> I
         burial: None,
     };
 
-    for (line, children) in level1(body) {
+    for (line, children) in nested(body, 1) {
         match line.tag {
             // The NAME line's own value is ignored: GIVN and SURN carry the same
             // pieces split out, which is what the card fields want.
@@ -303,7 +311,7 @@ fn read_family<'a>(body: &'a [Line], diagnostics: &mut Vec<Diagnostic>) -> Famil
         divorce: None,
     };
 
-    for (line, children) in level1(body) {
+    for (line, children) in nested(body, 1) {
         match line.tag {
             "HUSB" => family.husband = line.value.or(family.husband),
             "WIFE" => family.wife = line.value.or(family.wife),
@@ -326,23 +334,25 @@ fn read_family<'a>(body: &'a [Line], diagnostics: &mut Vec<Diagnostic>) -> Famil
     family
 }
 
-/// The level-1 lines of a record, each paired with the block of deeper lines
-/// under it — everything until the next level-1 line or the end of the record.
-/// It is the one place both `read_individual` and `read_family` walk a record's
-/// structure, so the level bookkeeping lives here alone.
-fn level1<'a, 'b>(body: &'b [Line<'a>]) -> Vec<(&'b Line<'a>, &'b [Line<'a>])> {
+/// Each line at `level` within `lines`, paired with the block of deeper lines
+/// beneath it — everything until the next line at `level` or shallower. It is the
+/// one place a record's structure is walked: a record's level-1 details, an
+/// event's level-2 details, a place's nested MAP, all through the same bookkeeping.
+/// A record body is passed whole; its level-0 head is shallower than any `level`
+/// asked for, so it falls out on its own.
+fn nested<'a, 'b>(lines: &'b [Line<'a>], level: u8) -> Vec<(&'b Line<'a>, &'b [Line<'a>])> {
     let mut out = Vec::new();
-    let mut i = 1;
-    while i < body.len() {
-        if body[i].level != 1 {
+    let mut i = 0;
+    while i < lines.len() {
+        if lines[i].level != level {
             i += 1;
             continue;
         }
         let mut next = i + 1;
-        while next < body.len() && body[next].level > 1 {
+        while next < lines.len() && lines[next].level > level {
             next += 1;
         }
-        out.push((&body[i], &body[i + 1..next]));
+        out.push((&lines[i], &lines[i + 1..next]));
         i = next;
     }
     out
@@ -374,10 +384,11 @@ fn read_name(
 }
 
 /// Reads a `BIRT`/`DEAT`/`BURI` (or a family's `MARR`/`DIV`) event from the lines
-/// under it: `DATE`, `PLAC`, `AGE` and `CAUS`, the four a card's event block can
-/// hold. A `DATE` is turned into the card spelling here; one GEDCOM writes in a
-/// form the card grammar has no room for is named rather than dropped. Returns
-/// None for an event carrying nothing a card can hold, which the caller skips.
+/// under it: `DATE`, `PLAC` (with the `MAP` coordinates beneath it), `NOTE`, `AGE`
+/// and `CAUS`, the fields a card's event block can hold. A `DATE` is turned into
+/// the card spelling here; one GEDCOM writes in a form the card grammar has no room
+/// for is named rather than dropped. Returns None for an event carrying nothing a
+/// card can hold, which the caller skips.
 fn read_event(
     head: &Line,
     event: &str,
@@ -385,17 +396,18 @@ fn read_event(
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<RawEvent> {
     let mut raw = RawEvent::default();
-    for line in children {
-        if line.level != 2 {
-            continue;
-        }
+    for (line, deeper) in nested(children, 2) {
         match line.tag {
             "DATE" => {
                 raw.date = line
                     .value
                     .and_then(|value| card_date(value, head, event, diagnostics))
             }
-            "PLAC" => raw.place = line.value.map(String::from),
+            "PLAC" => {
+                raw.place = line.value.map(String::from);
+                raw.coords = read_coords(head, event, deeper, diagnostics);
+            }
+            "NOTE" => raw.note = line.value.map(String::from),
             "AGE" => raw.age = line.value.map(String::from),
             "CAUS" => raw.cause = line.value.map(String::from),
             tag if is_bookkeeping(tag) => {}
@@ -406,6 +418,93 @@ fn read_event(
         }
     }
     (!raw.is_empty()).then_some(raw)
+}
+
+/// The coordinates under a `PLAC`, in the card's `lat, lon` spelling — the inverse
+/// of `parse_coords`. GEDCOM nests them as `MAP` with `LATI` and `LONG` beneath;
+/// a MAP missing either, or one whose values a card cannot hold, is named rather
+/// than dropped. Any other line under the place — a `FORM`, a phonetic variation —
+/// has no card field and is named the same way.
+fn read_coords(
+    head: &Line,
+    event: &str,
+    place: &[Line],
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Option<String> {
+    let mut lati = None;
+    let mut long = None;
+    for (line, under) in nested(place, 3) {
+        if line.tag != "MAP" {
+            if !is_bookkeeping(line.tag) {
+                diagnostics.push(record_problem(
+                    head,
+                    &format!("{event} place detail {} is not imported yet", line.tag),
+                ));
+            }
+            continue;
+        }
+        for map_line in under {
+            if map_line.level != 4 {
+                continue;
+            }
+            match map_line.tag {
+                "LATI" => lati = map_line.value,
+                "LONG" => long = map_line.value,
+                tag if is_bookkeeping(tag) => {}
+                tag => diagnostics.push(record_problem(
+                    head,
+                    &format!("{event} map detail {tag} is not imported yet"),
+                )),
+            }
+        }
+    }
+    match (lati, long) {
+        (Some(lati), Some(long)) => card_coords(lati, long).or_else(|| {
+            diagnostics.push(record_problem(
+                head,
+                &format!("{event} coordinates {lati:?} {long:?} are not a form a card can hold"),
+            ));
+            None
+        }),
+        (None, None) => None,
+        _ => {
+            diagnostics.push(record_problem(
+                head,
+                &format!("{event} MAP needs both a LATI and a LONG to import"),
+            ));
+            None
+        }
+    }
+}
+
+/// A GEDCOM `N55.7314` / `E37.9256` pair as the card spells it: `55.7314, 37.9256`
+/// — the inverse of `parse_coords`. The hemisphere letter becomes the sign, S and W
+/// turning it negative. None when either is not a hemisphere letter followed by a
+/// plain decimal.
+fn card_coords(lati: &str, long: &str) -> Option<String> {
+    let lat = card_degree(lati, 'N', 'S')?;
+    let lon = card_degree(long, 'E', 'W')?;
+    Some(format!("{lat}, {lon}"))
+}
+
+/// One GEDCOM coordinate as the card spells it: the hemisphere letter dropped for
+/// its sign, the magnitude kept verbatim. None unless it is `positive`/`negative`
+/// then a plain decimal — a guard against `N`, `Nabc` and the like round-tripping
+/// into a coords line the compiler would only reject.
+fn card_degree(text: &str, positive: char, negative: char) -> Option<String> {
+    let mut chars = text.chars();
+    let sign = match chars.next()? {
+        letter if letter == positive => "",
+        letter if letter == negative => "-",
+        _ => return None,
+    };
+    let magnitude = chars.as_str();
+    let plain = !magnitude.is_empty()
+        && magnitude.matches('.').count() <= 1
+        && magnitude.starts_with(|c: char| c.is_ascii_digit())
+        && magnitude.ends_with(|c: char| c.is_ascii_digit())
+        && magnitude.chars().all(|c| c.is_ascii_digit() || c == '.');
+    plain.then(|| format!("{sign}{magnitude}"))
 }
 
 const MONTHS: [&str; 12] = [
@@ -722,7 +821,8 @@ fn card_yaml(
 }
 
 /// Writes an event block if it carries anything, in the field order the compiler
-/// reads: date, place, age, cause. Two levels of indentation, as YAML nests them.
+/// reads: date, place, coords, note, age, cause. Two levels of indentation, as
+/// YAML nests them.
 fn push_event(yaml: &mut String, key: &str, event: Option<&RawEvent>) {
     let Some(event) = event else {
         return;
@@ -731,14 +831,20 @@ fn push_event(yaml: &mut String, key: &str, event: Option<&RawEvent>) {
     push_event_body(yaml, event, "  ");
 }
 
-/// The date/place/age/cause lines of an event, at the given indent. Shared by the
-/// top-level events and the divorce nested in a marriage.
+/// The date, place, coords, note, age and cause lines of an event, at the given
+/// indent. Shared by the top-level events and the divorce nested in a marriage.
 fn push_event_body(yaml: &mut String, event: &RawEvent, indent: &str) {
     if let Some(date) = &event.date {
         yaml.push_str(&format!("{indent}date: {}\n", yaml_date(date)));
     }
     if let Some(place) = &event.place {
         yaml.push_str(&format!("{indent}place: {place}\n"));
+    }
+    if let Some(coords) = &event.coords {
+        yaml.push_str(&format!("{indent}coords: {coords}\n"));
+    }
+    if let Some(note) = &event.note {
+        yaml.push_str(&format!("{indent}note: {note}\n"));
     }
     if let Some(age) = &event.age {
         yaml.push_str(&format!("{indent}age: {age}\n"));
