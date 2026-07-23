@@ -51,10 +51,16 @@ struct Date {
 
 /// A life event. GEDCOM allows either part on its own, and a card with only
 /// a place is ordinary: the village is remembered when the year is not.
+///
+/// `age` and `cause` are GEDCOM's EVENT_DETAIL, valid under any event; a card
+/// only ever writes them on `death`, where they read as an age at and a cause
+/// of death, but the block carries them uniformly for whichever event has them.
 #[derive(Clone)]
 struct Event {
     date: Option<Date>,
     place: Option<String>,
+    age: Option<String>,
+    cause: Option<String>,
 }
 
 /// A marriage as one card declares it. The other spouse's card says nothing:
@@ -80,6 +86,7 @@ struct Person {
     sex: String,
     birth: Option<Event>,
     death: Option<Event>,
+    burial: Option<Event>,
     father: Option<String>,
     mother: Option<String>,
     marriage: Option<Marriage>,
@@ -391,6 +398,18 @@ fn parse_date(text: &str) -> Option<Date> {
     }
 }
 
+/// A YAML integer where a string is wanted — a bare year `1947` or a bare
+/// `age: 75` — is rewritten to its string form in place, so the reader below
+/// sees a string rather than a value it would reject. Anything else is left
+/// untouched. It spares the author quotes they could not guess were needed.
+fn coerce_integer_to_string(mapping: &mut serde_norway::Mapping, key: &str) {
+    if let Some(value) = mapping.get_mut(key)
+        && let Some(number) = value.as_i64()
+    {
+        *value = serde_norway::Value::String(number.to_string());
+    }
+}
+
 /// Like `take_optional_string`, but the value must also be a date, and it
 /// comes back in GEDCOM spelling.
 fn take_date(
@@ -399,13 +418,7 @@ fn take_date(
     card: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<Date> {
-    // A bare year is a YAML integer where every other form is a string, so it
-    // is read as one rather than made to carry quotes the author cannot guess.
-    if let Some(value) = mapping.get_mut(key_of(field))
-        && let Some(year) = value.as_i64()
-    {
-        *value = serde_norway::Value::String(year.to_string());
-    }
+    coerce_integer_to_string(mapping, key_of(field));
     let text = take_optional_string(mapping, field, Some(card), diagnostics)?;
     let date = parse_date(&text);
     if date.is_none() {
@@ -418,8 +431,10 @@ fn take_date(
     date
 }
 
-/// Reads a `birth`/`death` block. Either part may be left out, but a block
-/// carrying neither says nothing and is a mistake rather than an empty event.
+/// Reads a `birth`/`death`/`burial` block. Every part may be left out, but a
+/// block carrying nothing says nothing and is a mistake rather than an empty
+/// event. `age` and `cause` are the death's extras — GEDCOM's EVENT_DETAIL —
+/// read here uniformly for any event, since the block is one shape.
 fn take_event(
     mapping: &mut serde_norway::Mapping,
     field: &str,
@@ -435,12 +450,26 @@ fn take_event(
                 Some(card),
                 diagnostics,
             );
+            coerce_integer_to_string(&mut block, "age");
+            let age =
+                take_optional_string(&mut block, &format!("{field}.age"), Some(card), diagnostics);
+            let cause = take_optional_string(
+                &mut block,
+                &format!("{field}.cause"),
+                Some(card),
+                diagnostics,
+            );
             report_unknown_keys(block, Some(field), Some(card), diagnostics);
-            return Some(Event { date, place });
+            return Some(Event {
+                date,
+                place,
+                age,
+                cause,
+            });
         }
-        serde_norway::Value::Mapping(_) => "needs a date or a place",
+        serde_norway::Value::Mapping(_) => "needs a date, a place, an age or a cause",
         serde_norway::Value::Null => "remove the key instead of leaving it empty",
-        _ => "expected a block with a date and/or a place",
+        _ => "expected a block with a date, a place, an age and/or a cause",
     };
     diagnostics.push(Diagnostic {
         card: Some(card.to_string()),
@@ -527,6 +556,8 @@ fn take_divorce(
             return Some(Event {
                 date: None,
                 place: None,
+                age: None,
+                cause: None,
             });
         }
         serde_norway::Value::Mapping(mut block) => {
@@ -538,7 +569,12 @@ fn take_divorce(
                 diagnostics,
             );
             report_unknown_keys(block, Some("marriage.divorce"), Some(card), diagnostics);
-            return Some(Event { date, place });
+            return Some(Event {
+                date,
+                place,
+                age: None,
+                cause: None,
+            });
         }
         _ => "expected a block with a date and/or a place, or nothing at all",
     };
@@ -570,7 +606,12 @@ fn take_marriage(
             report_unknown_keys(block, Some("marriage"), Some(card), diagnostics);
             return Some(Marriage {
                 spouse: spouse?,
-                event: Event { date, place },
+                event: Event {
+                    date,
+                    place,
+                    age: None,
+                    cause: None,
+                },
                 divorce,
             });
         }
@@ -646,6 +687,7 @@ fn parse_card(
     });
     let birth = take_event(&mut mapping, "birth", &card.id, diagnostics);
     let death = take_event(&mut mapping, "death", &card.id, diagnostics);
+    let burial = take_event(&mut mapping, "burial", &card.id, diagnostics);
     let father = take_optional_string(&mut mapping, "father", Some(&card.id), diagnostics)
         .and_then(|id| check_reference(id, "father", &card.id, ids, diagnostics));
     let mother = take_optional_string(&mut mapping, "mother", Some(&card.id), diagnostics)
@@ -664,6 +706,7 @@ fn parse_card(
         sex: sex?,
         birth,
         death,
+        burial,
         father,
         mother,
         marriage,
@@ -806,8 +849,8 @@ fn emit_event(ged: &mut String, tag: &str, event: Option<&Event>) {
     // a DATE tag and value or a PLACe tag and value in the event structure.
     // When neither the date value nor the place value are known then a Y(es)
     // value on the parent event tag line is required to assert that the event
-    // happened." Only a marriage or a divorce gets here bare — a birth or
-    // death block with neither part is refused on the card.
+    // happened." An age or a cause is EVENT_DETAIL, not an assertion, so a block
+    // carrying only those still gets the Y — as does a bare marriage or divorce.
     let asserted = if event.date.is_none() && event.place.is_none() {
         " Y"
     } else {
@@ -819,6 +862,14 @@ fn emit_event(ged: &mut String, tag: &str, event: Option<&Event>) {
     }
     if let Some(place) = &event.place {
         ged.push_str(&format!("2 PLAC {place}\n"));
+    }
+    // AGE and CAUS come after DATE and PLAC, the order a MyHeritage export
+    // writes them in. A marriage or divorce never carries them.
+    if let Some(age) = &event.age {
+        ged.push_str(&format!("2 AGE {age}\n"));
+    }
+    if let Some(cause) = &event.cause {
+        ged.push_str(&format!("2 CAUS {cause}\n"));
     }
 }
 
@@ -875,6 +926,7 @@ fn emit(config: &Config, people: &[Person], families: &[Family]) -> String {
         // grammar lists them in.
         emit_event(&mut ged, "BIRT", person.birth.as_ref());
         emit_event(&mut ged, "DEAT", person.death.as_ref());
+        emit_event(&mut ged, "BURI", person.burial.as_ref());
         // FAMC before FAMS, the order the grammar lists the two links in.
         if let Some(family) = child_in.get(person.id.as_str()) {
             ged.push_str(&format!("1 FAMC {family}\n"));

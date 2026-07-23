@@ -4,14 +4,14 @@ use std::process::ExitCode;
 
 use gedcards::Card;
 
-const USAGE: &str = "usage: gedc <build|schema|import>\n\nbuild        reads people/*.yaml and tree.yaml from the current directory\n             and writes family.ged (GEDCOM 5.5.1, UTF-8).\nschema       prints a JSON Schema for the cards in people/, so an editor can\n             complete and check the ids a card names:\n             gedc schema > .vscode/people.schema.json\nimport FILE  reads a GEDCOM 5.5.1 file and writes tree.yaml and one card per\n             person into the current directory.";
+const USAGE: &str = "usage: gedc <build|schema|import>\n\nbuild        reads people/*.yaml and tree.yaml from the current directory\n             and writes family.ged (GEDCOM 5.5.1, UTF-8).\nschema       prints a JSON Schema for the cards in people/, so an editor can\n             complete and check the ids a card names:\n             gedc schema > .vscode/people.schema.json\nimport [--submitter NAME] FILE\n             reads a GEDCOM 5.5.1 file and writes tree.yaml and one card per\n             person into the current directory. --submitter sets tree.yaml's\n             submitter, for a file whose SUBM an export left out.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.as_slice() {
         [command] if command == "build" => build(),
         [command] if command == "schema" => schema(),
-        [command, path] if command == "import" => import(Path::new(path)),
+        [command, rest @ ..] if command == "import" => import(rest),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)
@@ -75,7 +75,36 @@ fn schema() -> ExitCode {
 /// Reads a GEDCOM file and writes a tree: tree.yaml plus one card per person
 /// in people/. Import bootstraps a new tree, so it refuses to run where a
 /// tree.yaml already sits rather than write over cards it did not author.
-fn import(path: &Path) -> ExitCode {
+///
+/// The arguments are the file to read and an optional `--submitter NAME` that
+/// sets tree.yaml's submitter — all the parsing the import command does, kept
+/// here at the entry point rather than in the library.
+fn import(args: &[String]) -> ExitCode {
+    let mut file: Option<&str> = None;
+    let mut submitter: Option<&str> = None;
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--submitter" => match rest.next() {
+                Some(name) => submitter = Some(name),
+                None => {
+                    eprintln!("{USAGE}");
+                    return ExitCode::from(2);
+                }
+            },
+            path if file.is_none() && !path.starts_with("--") => file = Some(path),
+            _ => {
+                eprintln!("{USAGE}");
+                return ExitCode::from(2);
+            }
+        }
+    }
+    let Some(file) = file else {
+        eprintln!("{USAGE}");
+        return ExitCode::from(2);
+    };
+    let path = Path::new(file);
+
     let ged = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(err) => {
@@ -88,7 +117,7 @@ fn import(path: &Path) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let (tree_yaml, cards) = match gedcards::import(&ged) {
+    let (tree_yaml, cards) = match gedcards::import(&ged, submitter) {
         Ok(imported) => imported,
         Err(diagnostics) => {
             for diagnostic in &diagnostics {

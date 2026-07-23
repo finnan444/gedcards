@@ -1,0 +1,48 @@
+0 HEAD
+1 SOUR gedc
+1 SUBM @SUB1@
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 LANG Russian
+0 @I1@ INDI
+1 NAME Александр /Буруков/
+2 GIVN Александр
+2 SURN Буруков
+1 SEX M
+1 BIRT
+2 DATE 22 SEP 1947
+2 PLAC Москва, Россия
+1 DEAT
+2 DATE 28 AUG 2023
+2 PLAC Москва, Россия
+2 AGE 75
+2 CAUS Stroke
+1 BURI
+2 PLAC Николо-Архангельское кладбище
+0 @I2@ INDI
+1 NAME Нина /Орлова/
+2 GIVN Нина
+2 SURN Орлова
+1 SEX F
+1 DEAT Y
+2 CAUS Natural / Old Age
+1 BURI
+2 DATE MAY 1990
+2 PLAC Тверь
+0 @I3@ INDI
+1 NAME Павел /Соколов/
+2 GIVN Павел
+2 SURN Соколов
+1 SEX M
+1 BIRT
+2 DATE 1930
+1 DEAT
+2 DATE 14 MAR 2001
+2 AGE 71
+1 BURI
+2 DATE 18 MAR 2001
+0 @SUB1@ SUBM
+1 NAME Иван Иванов
+0 TRLR

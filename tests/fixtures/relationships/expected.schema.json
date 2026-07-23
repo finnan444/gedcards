@@ -33,6 +33,9 @@
     "death": {
       "$ref": "#/definitions/event"
     },
+    "burial": {
+      "$ref": "#/definitions/event"
+    },
     "father": {
       "enum": [
         "ivan-ivanov",
@@ -111,6 +114,15 @@
           "$ref": "#/definitions/date"
         },
         "place": {
+          "type": "string"
+        },
+        "age": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "cause": {
           "type": "string"
         }
       }
