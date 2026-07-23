@@ -48,22 +48,22 @@ pub fn import(ged: &str) -> Result<(String, Vec<Card>), Vec<Diagnostic>> {
 
     // Walk the level-0 records. Each record is the opening line plus every line
     // under it until the next level-0 line.
-    let mut record = 0;
-    while record < lines.len() {
-        let mut next = record + 1;
+    let mut start = 0;
+    while start < lines.len() {
+        let mut next = start + 1;
         while next < lines.len() && lines[next].level != 0 {
             next += 1;
         }
-        let body = &lines[record..next];
+        let body = &lines[start..next];
         let head = &body[0];
+        // The header and the submitter record are read narrowly on purpose —
+        // one field each, the rest of the metadata ignored — see the module
+        // comment. A field only present in a later record still wins, and one
+        // absent there never clobbers what an earlier record supplied.
         match head.tag {
-            "HEAD" => read_header(body, &mut language),
-            "SUBM" => read_submitter(body, &mut submitter),
-            "INDI" => {
-                if let Some(person) = read_individual(body, &mut diagnostics) {
-                    imported.push(person);
-                }
-            }
+            "HEAD" => language = read_level1(body, "LANG").or(language),
+            "SUBM" => submitter = read_level1(body, "NAME").or(submitter),
+            "INDI" => imported.push(read_individual(body, &mut diagnostics)),
             "TRLR" => {}
             "FAM" => diagnostics.push(record_problem(
                 head,
@@ -74,7 +74,7 @@ pub fn import(ged: &str) -> Result<(String, Vec<Card>), Vec<Diagnostic>> {
                 &format!("unexpected {} record", head.tag),
             )),
         }
-        record = next;
+        start = next;
     }
 
     // tree.yaml needs both, and the compiler will refuse a card set without
@@ -154,34 +154,25 @@ fn parse_line(text: &str) -> Option<Line<'_>> {
     })
 }
 
-/// Reads `LANG` out of the header and ignores the rest: the header is metadata
-/// `gedc build` writes fresh, so nothing else in it is a person's fact to lose.
-fn read_header(body: &[Line], language: &mut Option<String>) {
-    for line in &body[1..] {
-        if line.level == 1 && line.tag == "LANG" {
-            *language = line.value.map(String::from);
-        }
-    }
-}
-
-/// Reads the submitter's `NAME`. Like the header, the record is lenient: any
-/// other detail a tool wrote into it is metadata, not a card's fact.
-fn read_submitter(body: &[Line], submitter: &mut Option<String>) {
-    for line in &body[1..] {
-        if line.level == 1 && line.tag == "NAME" {
-            *submitter = line.value.map(String::from);
-        }
-    }
+/// The value of the last level-1 line with this tag, or None. It is how the one
+/// field each of the header (`LANG`) and the submitter record (`NAME`) is pulled
+/// out while the rest of that record's metadata is left alone.
+fn read_level1(body: &[Line], tag: &str) -> Option<String> {
+    body[1..]
+        .iter()
+        .rfind(|line| line.level == 1 && line.tag == tag)
+        .and_then(|line| line.value.map(String::from))
 }
 
 /// Reads one `INDI`. Only `NAME` (with its `GIVN`, `SURN` and `_MARNM`) and
 /// `SEX` map to a card field; any other tag is a fact this card cannot hold yet,
-/// so it is named rather than dropped.
-fn read_individual(body: &[Line], diagnostics: &mut Vec<Diagnostic>) -> Option<Imported> {
+/// so it is named rather than dropped. A person with a missing name or sex is
+/// still returned carrying its diagnostics — `assign_ids` skips the id it cannot
+/// have, and the run fails anyway with nothing written.
+fn read_individual(body: &[Line], diagnostics: &mut Vec<Diagnostic>) -> Imported {
     let head = &body[0];
-    let label = record_label(head);
     let mut person = Imported {
-        label: label.clone(),
+        label: record_label(head),
         given: None,
         surname: None,
         married_surname: None,
@@ -220,7 +211,7 @@ fn read_individual(body: &[Line], diagnostics: &mut Vec<Diagnostic>) -> Option<I
     if person.sex.is_none() {
         diagnostics.push(record_problem(head, "no SEX to import"));
     }
-    Some(person)
+    person
 }
 
 /// Reads the pieces under a `NAME`. `_MARNM` is the MyHeritage extension for a
