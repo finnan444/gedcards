@@ -638,7 +638,7 @@ fn parse_config(config_yaml: &str, diagnostics: &mut Vec<Diagnostic>) -> Option<
 }
 
 /// Ids are slugs per the project glossary: latin translit like
-/// `ivan-ivanov` or `pyotr-ivanov-1947`. Cyrillic is not allowed.
+/// `ivanov-ivan` or `ivanov-pyotr-1947`. Cyrillic is not allowed.
 ///
 /// `schema` states this shape as a regex, for the tree that has no id to
 /// offer; change one and change the other.

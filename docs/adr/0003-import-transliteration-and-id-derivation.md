@@ -4,13 +4,15 @@
 (#7) left open are settled here: how a card gets its id, what transliteration turns
 a Cyrillic name into a latin one, and what happens to a tag no card field holds yet.
 
-## The id is the first given name and the surname, transliterated
+## The id is the surname and the first given name, transliterated
 
-An id is a latin slug — `ivan-ivanov` — and a `.ged` gives names in Cyrillic, so
-import has to transliterate. The id is built from the first word of `GIVN` and the
-`SURN`: `Пётр Сергеевич /Иванов/` becomes `pyotr-ivanov`. The patronymic is left out
-of the id, the way the README's authored ids leave it out, even though it stays in
-the `name` field (see below).
+An id is a latin slug — `ivanov-ivan` — and a `.ged` gives names in Cyrillic, so
+import has to transliterate. The id is built from the `SURN` and the first word of
+`GIVN`: `Пётр Сергеевич /Иванов/` becomes `ivanov-pyotr`. The surname leads so a
+`people/` directory sorts into families — every Ivanov adjacent, the maiden-name
+women beside their parents — rather than scattering by given name. The patronymic is
+left out of the id, the way the README's authored ids leave it out, even though it
+stays in the `name` field (see below).
 
 The transliteration is a fixed table, Russian Cyrillic to latin, chosen to read the
 way these names usually do in latin script rather than to satisfy a formal standard:
@@ -24,7 +26,7 @@ way these names usually do in latin script rather than to satisfy a formal stand
 GOST 7.79 and ICAO Doc 9303 were the named alternatives. Both are built for
 reversible passport-style transcription and spell `ё` as `e`, `ю` as `iu`, `я` as
 `ia` — `Пётр` becomes `Petr`, not `Pyotr`. This table matches the ids already in the
-tree (`pyotr-ivanov`, `sidorova`, `kuznetsova`) because it favours the conventional
+tree (`ivanov-pyotr`, `sidorova`, `kuznetsova`) because it favours the conventional
 reading. Reversibility is not a goal: an id is a handle, not a name to reconstruct.
 
 The table is only defined for Russian. A letter it does not know is dropped from the
@@ -33,7 +35,7 @@ reported rather than given an empty one.
 
 **Ids do not round-trip to the authored ones, and need not.** `Мария` transliterates
 to `mariya` where the card was hand-named `maria`; a patronymic that shaped an
-authored id (`olga-ivanova` for a woman with surname `Смирнова`) is gone. This is
+authored id (`ivanova-olga` for a woman with surname `Смирнова`) is gone. This is
 fine: an id appears nowhere in the emitted `.ged` — cross-references are `@I1@` by
 sorted position — so as long as the derived ids sort in the same order, a
 build → import → build round trip is byte-identical regardless.
@@ -41,11 +43,11 @@ build → import → build round trip is byte-identical regardless.
 ## Namesakes get the birth-year suffix, and a numeric one where that will not do
 
 Two people whose names transliterate to the same slug collide. The README's answer is
-a birth-year suffix (`pyotr-ivanov-1947`), and birth dates now import, so that is what
+a birth-year suffix (`ivanov-pyotr-1947`), and birth dates now import, so that is what
 import uses: the first of a name keeps the bare slug, and a namesake gains the year of
 their birth. Where even that will not separate them — two namesakes born the same year,
 or one with no birth date — a numeric suffix in file order is the last resort:
-`ivan-ivanov`, `ivan-ivanov-2`, `ivan-ivanov-3`. Both are deterministic for a given
+`ivanov-ivan`, `ivanov-ivan-2`, `ivanov-ivan-3`. Both are deterministic for a given
 file, which is all an id has to be.
 
 ## A tag with no card *field* stops the import, naming it — but bookkeeping does not

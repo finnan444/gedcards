@@ -12,15 +12,15 @@
 2 SURN Иванов
 1 SEX M
 0 @I2@ INDI
-1 NAME Мария /Сидорова/
-2 GIVN Мария
-2 SURN Сидорова
-1 SEX F
-0 @I3@ INDI
 1 NAME Пётр /Иванов/
 2 GIVN Пётр
 2 SURN Иванов
 1 SEX M
+0 @I3@ INDI
+1 NAME Мария /Сидорова/
+2 GIVN Мария
+2 SURN Сидорова
+1 SEX F
 0 @SUB1@ SUBM
 1 NAME Иван Иванов
 0 TRLR

@@ -21,8 +21,8 @@ you don't have to.
   and asserts the bytes match.
 - **Every error in one run.** All problems are reported together, so you fix a batch
   instead of one per rebuild — and when anything is wrong, nothing is written.
-- **Typos get a suggestion.** An unknown `father: pyotr-ivanof` answers with
-  `did you mean pyotr-ivanov?`.
+- **Typos get a suggestion.** An unknown `father: ivanof-pyotr` answers with
+  `did you mean ivanov-pyotr?`.
 - **UTF-8 throughout.** Cyrillic goes in and comes out unchanged, with `1 CHAR UTF-8`
   in the header.
 - **Small.** One direct dependency (`serde_norway`), 14 crates in a release build. The
@@ -32,7 +32,7 @@ you don't have to.
 One card in:
 
 ```yaml
-# people/maria-sidorova.yaml
+# people/sidorova-maria.yaml
 name: Мария
 patronymic: Петровна
 surname: Сидорова
@@ -108,7 +108,7 @@ language: Russian
 ```
 
 **5. Write one card per person in `people/`.** The file name without its extension is
-that person's id, so `people/ivan-ivanov.yaml` is the person `ivan-ivanov`:
+that person's id, so `people/ivanov-ivan.yaml` is the person `ivanov-ivan`:
 
 ```yaml
 name: Иван
@@ -130,7 +130,7 @@ my-tree/
   tree.yaml
   family.ged      <- generated; add it to .gitignore
   people/
-    ivan-ivanov.yaml
+    ivanov-ivan.yaml
 ```
 
 **7. Import `family.ged`** into whatever genealogy service or desktop app you use.
@@ -217,10 +217,10 @@ A card names its parents by id, and one card of a married pair carries the `marr
 name: Иван
 surname: Иванов
 sex: M
-father: pyotr-ivanov
-mother: maria-sidorova
+father: ivanov-pyotr
+mother: sidorova-maria
 marriage:
-  spouse: anna-petrova
+  spouse: petrova-anna
   date: 1970-09-12
   place: Тверь
 ```
@@ -240,7 +240,7 @@ A marriage that ended carries a `divorce`, written inside it:
 
 ```yaml
 marriage:
-  spouse: anna-petrova
+  spouse: petrova-anna
   date: 1970-09-12
   place: Тверь
   divorce:
@@ -263,9 +263,10 @@ error. So is naming an id no card has.
 ## Ids
 
 An id is the card's file name without the extension, and it is what `father`, `mother`
-and `spouse` reference. Use a latin transliteration — `ivan-ivanov`, and for namesakes
-a birth-year suffix, `pyotr-ivanov-1947`. Lowercase latin letters, digits and single
-inner hyphens only.
+and `spouse` reference. Use a latin transliteration, surname first — `ivanov-ivan`, and
+for namesakes a birth-year suffix, `ivanov-pyotr-1947`. Lowercase latin letters, digits
+and single inner hyphens only. The surname leads so that `people/` sorts into families
+rather than scattering by given name — the same order `gedc import` derives.
 
 ---
 
@@ -288,9 +289,9 @@ it fills in (or overrides) what the file left out:
 gedc import --submitter "Пётр Рыковский" ~/Downloads/my-heritage-export.ged
 ```
 
-Each person's id is derived from their name — the first given name and the surname,
-transliterated to a latin slug (`Пётр Сергеевич /Иванов/` becomes `pyotr-ivanov`),
-with a birth-year suffix for namesakes (`pyotr-ivanov-1947`), or a numeric one where
+Each person's id is derived from their name — the surname and the first given name,
+transliterated to a latin slug (`Пётр Сергеевич /Иванов/` becomes `ivanov-pyotr`),
+with a birth-year suffix for namesakes (`ivanov-pyotr-1947`), or a numeric one where
 the year is unknown or shared. The scheme, and why it is not GOST or ICAO, is in
 [ADR 0003](docs/adr/0003-import-transliteration-and-id-derivation.md).
 
@@ -322,9 +323,9 @@ than one error per rebuild. Because a mistyped id is the usual way a reference g
 wrong, an unknown one names the closest id there is:
 
 ```
-error: ivan-ivanov: father: no card with id pyotr-ivanof, did you mean pyotr-ivanov?
-error: pyotr-ivanov: birth.date: expected a date like 1995-07-25, 1995-07 or 1995, optionally prefixed with ~, < or >
-error: pyotr-ivanov: age: unknown key
+error: ivanov-ivan: father: no card with id ivanof-pyotr, did you mean ivanov-pyotr?
+error: ivanov-pyotr: birth.date: expected a date like 1995-07-25, 1995-07 or 1995, optionally prefixed with ~, < or >
+error: ivanov-pyotr: age: unknown key
 3 problem(s) found, family.ged not written
 ```
 
@@ -376,7 +377,7 @@ use gedcards::{Card, compile};
 
 let config = "submitter: Иван Иванов\nlanguage: Russian\n";
 let cards = [Card {
-    id: "ivan-ivanov".to_string(),
+    id: "ivanov-ivan".to_string(),
     yaml: "name: Иван\nsurname: Иванов\nsex: M\n".to_string(),
 }];
 
