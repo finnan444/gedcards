@@ -5,8 +5,19 @@
   "additionalProperties": false,
   "required": [
     "name",
-    "surname",
     "sex"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "surname"
+      ]
+    },
+    {
+      "required": [
+        "married_surname"
+      ]
+    }
   ],
   "properties": {
     "name": {

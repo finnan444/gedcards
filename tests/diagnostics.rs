@@ -254,6 +254,34 @@ fn missing_required_card_fields_are_reported() {
     );
 }
 
+/// A person a tree knows only by the name they took at marriage never had a
+/// birth surname recorded, so `married_surname` stands in for the `surname` the
+/// card would otherwise have to invent.
+#[test]
+fn a_married_surname_stands_in_for_a_missing_surname() {
+    let cards = [card(
+        "ivanova-maria",
+        "name: Мария\nmarried_surname: Иванова\nsex: F\n",
+    )];
+    assert!(compile(CONFIG, &cards).is_ok());
+}
+
+/// A card with neither surname is missing the one it should normally carry, and
+/// that is the field the diagnostic names.
+#[test]
+fn a_card_with_neither_surname_is_reported() {
+    let cards = [card("maria", "name: Мария\nsex: F\n")];
+    let diagnostics = compile(CONFIG, &cards).unwrap_err();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("maria"),
+            Some("surname"),
+            "required field is missing"
+        )]
+    );
+}
+
 #[test]
 fn broken_card_yaml_is_reported() {
     let cards = [card("ivan-petrov", "name: [unclosed\n")];

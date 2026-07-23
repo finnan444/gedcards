@@ -89,14 +89,24 @@ struct Marriage {
     divorce: Option<Event>,
 }
 
+/// The surname or surnames one card carries. `surname` is always the one at
+/// birth and `married_surname` the one taken at marriage, which is why the
+/// primary surname stays the birth one: maiden names keep displaying correctly
+/// after import. A person a tree knows only by the name they took at marriage
+/// never had a birth surname recorded, so that card carries the married surname
+/// on its own — see README (Names).
+enum Surnames {
+    /// The surname at birth, and the one taken at marriage when the card has both.
+    Birth(String, Option<String>),
+    /// The surname taken at marriage, in place of a birth one never learned.
+    Married(String),
+}
+
 struct Person {
     id: String,
     name: String,
     patronymic: Option<String>,
-    surname: String,
-    /// Surname taken at marriage. The primary surname stays the one at birth,
-    /// so maiden names keep displaying correctly after import.
-    married_surname: Option<String>,
+    surnames: Surnames,
     sex: String,
     birth: Option<Event>,
     death: Option<Event>,
@@ -114,6 +124,16 @@ impl Person {
         match &self.patronymic {
             Some(patronymic) => format!("{} {patronymic}", self.name),
             None => self.name.clone(),
+        }
+    }
+
+    /// The surname the `NAME` line and its `SURN` piece get: the one at birth,
+    /// or — for a card that never learned it — the one taken at marriage,
+    /// standing in its place.
+    fn surname(&self) -> &str {
+        match &self.surnames {
+            Surnames::Birth(birth, _) => birth,
+            Surnames::Married(married) => married,
         }
     }
 
@@ -767,9 +787,22 @@ fn parse_card(
     let mut mapping = parse_mapping(&card.yaml, Some(&card.id), diagnostics)?;
     let name = take_string(&mut mapping, "name", Some(&card.id), diagnostics);
     let patronymic = take_optional_string(&mut mapping, "patronymic", Some(&card.id), diagnostics);
-    let surname = take_string(&mut mapping, "surname", Some(&card.id), diagnostics);
+    // `surname` is the one at birth, and a card normally carries it. It may be
+    // left out only when `married_surname` stands in for it — a person a tree
+    // knows only by the name they took at marriage. A card naming neither is
+    // missing its `surname`, which is the field `take_string` then reports.
+    let surname = if mapping.contains_key("married_surname") {
+        take_optional_string(&mut mapping, "surname", Some(&card.id), diagnostics)
+    } else {
+        take_string(&mut mapping, "surname", Some(&card.id), diagnostics)
+    };
     let married_surname =
         take_optional_string(&mut mapping, "married_surname", Some(&card.id), diagnostics);
+    let surnames = match (surname, married_surname) {
+        (Some(surname), married_surname) => Some(Surnames::Birth(surname, married_surname)),
+        (None, Some(married_surname)) => Some(Surnames::Married(married_surname)),
+        (None, None) => None,
+    };
     let sex = take_string(&mut mapping, "sex", Some(&card.id), diagnostics).and_then(|sex| {
         if sex == "M" || sex == "F" {
             Some(sex)
@@ -798,8 +831,7 @@ fn parse_card(
         id: card.id.clone(),
         name: name?,
         patronymic,
-        surname: surname?,
-        married_surname,
+        surnames: surnames?,
         sex: sex?,
         birth,
         death,
@@ -1019,14 +1051,25 @@ fn emit(config: &Config, people: &[Person], families: &[Family]) -> String {
     for (index, person) in people.iter().enumerate() {
         ged.push_str(&format!("0 @I{}@ INDI\n", index + 1));
         let given = person.given();
-        ged.push_str(&format!("1 NAME {given} /{}/\n", person.surname));
+        let surname = person.surname();
+        ged.push_str(&format!("1 NAME {given} /{surname}/\n"));
+        // The name this card supplies is the one taken at marriage, so TYPE says
+        // so rather than letting the SURN below read as a name at birth. It is
+        // 5.5.1's own NAME_TYPE, spelled the way that version spells the value
+        // (7.0 spells it MARRIED), and it comes before the name pieces because
+        // that is the order PERSONAL_NAME_STRUCTURE lists them in.
+        if let Surnames::Married(_) = person.surnames {
+            ged.push_str("2 TYPE married\n");
+        }
         ged.push_str(&format!("2 GIVN {given}\n"));
-        ged.push_str(&format!("2 SURN {}\n", person.surname));
+        ged.push_str(&format!("2 SURN {surname}\n"));
         // _MARNM is not in GEDCOM 5.5.1; it is the extension MyHeritage
         // reads and writes for a surname taken at marriage. Shape checked
         // against a MyHeritage export (2026-07-19): level 2, directly after
         // SURN, and the value is a bare surname — not a slashed full name.
-        if let Some(married_surname) = &person.married_surname {
+        // A card whose SURN is already the married name has nothing left to
+        // contrast it with, so it gets none — its TYPE above says it all.
+        if let Surnames::Birth(_, Some(married_surname)) = &person.surnames {
             ged.push_str(&format!("2 _MARNM {married_surname}\n"));
         }
         ged.push_str(&format!("1 SEX {}\n", person.sex));
