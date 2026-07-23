@@ -38,16 +38,16 @@
     },
     "father": {
       "enum": [
-        "ivan-ivanov",
-        "pyotr-ivanov"
+        "ivanov-ivan",
+        "ivanov-pyotr"
       ]
     },
     "mother": {
       "enum": [
-        "anna-ivanova",
-        "maria-sidorova",
-        "olga-ivanova",
-        "zoya-ivanova"
+        "ivanova-anna",
+        "ivanova-olga",
+        "ivanova-zoya",
+        "sidorova-maria"
       ]
     },
     "marriage": {
@@ -59,12 +59,12 @@
       "properties": {
         "spouse": {
           "enum": [
-            "anna-ivanova",
-            "ivan-ivanov",
-            "maria-sidorova",
-            "olga-ivanova",
-            "pyotr-ivanov",
-            "zoya-ivanova"
+            "ivanov-ivan",
+            "ivanov-pyotr",
+            "ivanova-anna",
+            "ivanova-olga",
+            "ivanova-zoya",
+            "sidorova-maria"
           ]
         },
         "date": {

@@ -482,10 +482,10 @@ fn is_bookkeeping(tag: &str) -> bool {
     tag == "RIN" || tag.starts_with('_')
 }
 
-/// Gives each person a deterministic id: a latin slug of the first given name and
-/// the surname, per the README's id rules, keyed by their xref so the FAM records
-/// resolve. Namesakes — names that transliterate alike — take a birth-year suffix
-/// (`pyotr-ivanov-1947`), and where even that collides, or no birth year is known,
+/// Gives each person a deterministic id: a latin slug of the surname and the
+/// first given name, per the README's id rules, keyed by their xref so the FAM
+/// records resolve. Namesakes — names that transliterate alike — take a birth-year
+/// suffix (`ivanov-pyotr-1947`), and where even that collides, or no birth year is known,
 /// a numeric one in the order the file lists them. The same file always assigns
 /// the same ids.
 fn assign_ids<'a>(
@@ -775,13 +775,15 @@ fn yaml_date(date: &str) -> String {
     }
 }
 
-/// A latin id from the first given name and the surname: `Пётр Сергеевич` and
-/// `Иванов` become `pyotr-ivanov`. The patronymic is left out of the id the way
-/// the README's ids leave it out, even though it stays in the `name` field.
-/// None when nothing survives transliteration to build a slug from.
+/// A latin id from the surname and the first given name: `Иванов` and
+/// `Пётр Сергеевич` become `ivanov-pyotr`. The surname leads so a `people/`
+/// directory sorts into families rather than scattering by given name. The
+/// patronymic is left out of the id the way the README's ids leave it out, even
+/// though it stays in the `name` field. None when nothing survives
+/// transliteration to build a slug from.
 fn derive_id(given: &str, surname: &str) -> Option<String> {
     let first = given.split_whitespace().next().unwrap_or("");
-    let text = transliterate(&format!("{first} {surname}"));
+    let text = transliterate(&format!("{surname} {first}"));
     let slug = text
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|word| !word.is_empty())

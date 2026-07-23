@@ -121,7 +121,7 @@ fn tool_bookkeeping_tags_are_dropped_without_a_diagnostic() {
     );
     let (_, cards) = import(&ged, None).expect("import should succeed");
     assert_eq!(cards.len(), 1);
-    assert_eq!(cards[0].id, "ivan-ivanov");
+    assert_eq!(cards[0].id, "ivanov-ivan");
     assert_eq!(cards[0].yaml, "name: Иван\nsurname: Иванов\nsex: M\n");
 }
 
@@ -207,16 +207,16 @@ fn events_and_relationships_import() {
         .map(|card| (card.id.as_str(), card.yaml.as_str()))
         .collect();
     assert_eq!(
-        by_id["pyotr-ivanov"],
+        by_id["ivanov-pyotr"],
         "name: Пётр\nsurname: Иванов\nsex: M\n\
 birth:\n  date: 1947-03-12\n  place: Тверь\n\
 death:\n  date: 2020\n  age: 73\n  cause: Stroke\n\
 burial:\n  place: Москва\n\
-marriage:\n  spouse: anna-petrova\n  date: 1970\n  divorce:\n"
+marriage:\n  spouse: petrova-anna\n  date: 1970\n  divorce:\n"
     );
     assert_eq!(
-        by_id["olga-ivanova"],
-        "name: Ольга\nsurname: Иванова\nsex: F\nfather: pyotr-ivanov\nmother: anna-petrova\n"
+        by_id["ivanova-olga"],
+        "name: Ольга\nsurname: Иванова\nsex: F\nfather: ivanov-pyotr\nmother: petrova-anna\n"
     );
 }
 
@@ -245,7 +245,7 @@ fn a_namesake_takes_the_birth_year_suffix() {
     let (_, cards) = import(&ged, None).expect("import should succeed");
     let mut ids: Vec<&str> = cards.iter().map(|card| card.id.as_str()).collect();
     ids.sort();
-    assert_eq!(ids, vec!["ivan-ivanov", "ivan-ivanov-1947"]);
+    assert_eq!(ids, vec!["ivanov-ivan", "ivanov-ivan-1947"]);
 }
 
 /// A file MyHeritage exports leads with a UTF-8 BOM. It is stripped, so the
@@ -265,7 +265,7 @@ fn a_leading_byte_order_mark_is_stripped() {
     let (tree_yaml, cards) = import(&ged, None).expect("import should succeed");
     assert_eq!(tree_yaml, "submitter: Иван Иванов\nlanguage: Russian\n");
     assert_eq!(cards.len(), 1);
-    assert_eq!(cards[0].id, "ivan-ivanov");
+    assert_eq!(cards[0].id, "ivanov-ivan");
 }
 
 /// Two people whose names transliterate to the same slug, with no birth year yet
@@ -289,11 +289,11 @@ fn namesakes_get_a_numeric_suffix() {
     );
     let (_, cards) = import(&ged, None).expect("import should succeed");
     let ids: Vec<&str> = cards.iter().map(|card| card.id.as_str()).collect();
-    assert_eq!(ids, vec!["ivan-ivanov", "ivan-ivanov-2"]);
+    assert_eq!(ids, vec!["ivanov-ivan", "ivanov-ivan-2"]);
 }
 
 /// A patronymic in `GIVN` stays part of the name — it cannot be split back off —
-/// and is left out of the id, which is the first given name and the surname.
+/// and is left out of the id, which is the surname and the first given name.
 #[test]
 fn a_patronymic_stays_in_the_name_and_out_of_the_id() {
     let ged = format!(
@@ -307,7 +307,7 @@ fn a_patronymic_stays_in_the_name_and_out_of_the_id() {
     );
     let (_, cards) = import(&ged, None).expect("import should succeed");
     assert_eq!(cards.len(), 1);
-    assert_eq!(cards[0].id, "pyotr-ivanov");
+    assert_eq!(cards[0].id, "ivanov-pyotr");
     assert_eq!(
         cards[0].yaml,
         "name: Пётр Сергеевич\nsurname: Иванов\nsex: M\n"
