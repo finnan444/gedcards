@@ -1,8 +1,10 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 
+mod import;
 mod schema;
 
+pub use import::import;
 pub use schema::schema;
 
 /// One person card: `id` is the card file name without extension,

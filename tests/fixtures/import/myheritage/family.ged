@@ -1,0 +1,27 @@
+0 HEAD
+1 SOUR MYHERITAGE
+2 NAME MyHeritage Family Tree Builder
+2 VERS 9.0
+2 CORP MyHeritage.com Ltd.
+1 DEST MYHERITAGE
+1 DATE 19 JUL 2026
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 SUBM @SUB1@
+1 LANG Russian
+0 @I1@ INDI
+1 NAME Мария Петровна /Сидорова/
+2 GIVN Мария Петровна
+2 SURN Сидорова
+2 _MARNM Иванова
+1 SEX F
+0 @I2@ INDI
+1 NAME Иван /Иванов/
+2 GIVN Иван
+2 SURN Иванов
+1 SEX M
+0 @SUB1@ SUBM
+1 NAME Иван Иванов
+0 TRLR
