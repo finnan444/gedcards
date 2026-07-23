@@ -4,13 +4,14 @@ use std::process::ExitCode;
 
 use gedcards::Card;
 
-const USAGE: &str = "usage: gedc <build|schema>\n\nbuild   reads people/*.yaml and tree.yaml from the current directory\n        and writes family.ged (GEDCOM 5.5.1, UTF-8).\nschema  prints a JSON Schema for the cards in people/, so an editor can\n        complete and check the ids a card names:\n        gedc schema > .vscode/people.schema.json";
+const USAGE: &str = "usage: gedc <build|schema|import>\n\nbuild        reads people/*.yaml and tree.yaml from the current directory\n             and writes family.ged (GEDCOM 5.5.1, UTF-8).\nschema       prints a JSON Schema for the cards in people/, so an editor can\n             complete and check the ids a card names:\n             gedc schema > .vscode/people.schema.json\nimport FILE  reads a GEDCOM 5.5.1 file and writes tree.yaml and one card per\n             person into the current directory.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.as_slice() {
         [command] if command == "build" => build(),
         [command] if command == "schema" => schema(),
+        [command, path] if command == "import" => import(Path::new(path)),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)
@@ -68,6 +69,52 @@ fn schema() -> ExitCode {
         }
     };
     print!("{}", gedcards::schema(&cards));
+    ExitCode::SUCCESS
+}
+
+/// Reads a GEDCOM file and writes a tree: tree.yaml plus one card per person
+/// in people/. Import bootstraps a new tree, so it refuses to run where a
+/// tree.yaml already sits rather than write over cards it did not author.
+fn import(path: &Path) -> ExitCode {
+    let ged = match fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(err) => {
+            eprintln!("error: cannot read {}: {err}", path.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    if Path::new("tree.yaml").exists() {
+        eprintln!("error: tree.yaml already exists here, refusing to overwrite it");
+        return ExitCode::FAILURE;
+    }
+
+    let (tree_yaml, cards) = match gedcards::import(&ged) {
+        Ok(imported) => imported,
+        Err(diagnostics) => {
+            for diagnostic in &diagnostics {
+                eprintln!("error: {diagnostic}");
+            }
+            eprintln!("{} problem(s) found, nothing written", diagnostics.len());
+            return ExitCode::FAILURE;
+        }
+    };
+
+    if let Err(err) = fs::create_dir_all("people") {
+        eprintln!("error: cannot create people/: {err}");
+        return ExitCode::FAILURE;
+    }
+    for card in &cards {
+        let path = Path::new("people").join(format!("{}.yaml", card.id));
+        if let Err(err) = fs::write(&path, &card.yaml) {
+            eprintln!("error: cannot write {}: {err}", path.display());
+            return ExitCode::FAILURE;
+        }
+    }
+    if let Err(err) = fs::write("tree.yaml", &tree_yaml) {
+        eprintln!("error: cannot write tree.yaml: {err}");
+        return ExitCode::FAILURE;
+    }
+    println!("tree.yaml and {} card(s) written", cards.len());
     ExitCode::SUCCESS
 }
 

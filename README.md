@@ -70,6 +70,7 @@ birth:
 - [Dates and events](#dates-and-events)
 - [Relationships](#relationships)
 - [Ids](#ids)
+- [Importing an existing tree](#importing-an-existing-tree)
 - [Errors](#errors)
 - [Editor completion](#editor-completion)
 - [Library](#library)
@@ -257,6 +258,36 @@ inner hyphens only.
 
 ---
 
+## Importing an existing tree
+
+Already have a tree — a MyHeritage export, a file from another tool? `gedc import`
+reads a GEDCOM 5.5.1 file and writes `tree.yaml` and one card per person into the
+current directory, so you can move it onto this workflow without retyping anyone:
+
+```bash
+mkdir my-tree && cd my-tree
+gedc import ~/Downloads/my-heritage-export.ged
+```
+
+Each person's id is derived from their name — the first given name and the surname,
+transliterated to a latin slug (`Пётр Сергеевич /Иванов/` becomes `pyotr-ivanov`),
+with a numeric suffix for namesakes. The scheme, and why it is not GOST or ICAO, is in
+[ADR 0003](docs/adr/0003-import-transliteration-and-id-derivation.md).
+
+> **Import is partial, and says so.** Today it reads the name (`NAME` with `GIVN`,
+> `SURN` and `_MARNM`) and `SEX`. Birth and death dates and the `FAM` records that
+> carry relationships have no card field yet — so rather than drop them silently and
+> lose them on the next build, import stops and names every tag it cannot represent,
+> writing nothing. Those fields land as the format is parsed further. A patronymic is
+> a casualty of the same partiality in reverse: `GIVN` fuses it into the given name
+> with no way to split it back out, so it stays in `name` rather than being guessed at
+> (see [ADR 0002](docs/adr/0002-patronymic-joins-the-given-name.md)).
+
+Import refuses to run where a `tree.yaml` already sits, rather than write over cards
+it did not author.
+
+---
+
 ## Errors
 
 Every problem in the input is reported in one run, so you fix a batch at a time rather
@@ -342,7 +373,7 @@ match compile(config, &cards) {
 ```bash
 just          # list recipes
 just build    # build the binary
-just test     # run the test suite (62 tests)
+just test     # run the test suite (68 tests)
 just lint     # rustfmt + clippy
 just check    # lint + test
 ```
