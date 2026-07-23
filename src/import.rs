@@ -40,6 +40,9 @@ struct Imported {
 /// is produced.
 pub fn import(ged: &str) -> Result<(String, Vec<Card>), Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
+    // A UTF-8 BOM leads a file MyHeritage and other Windows tools export;
+    // stripped here so the `0 HEAD` it hides in front of parses like any line.
+    let ged = ged.strip_prefix('\u{feff}').unwrap_or(ged);
     let lines = parse_lines(ged, &mut diagnostics);
 
     let mut language: Option<String> = None;
@@ -197,6 +200,7 @@ fn read_individual(body: &[Line], diagnostics: &mut Vec<Diagnostic>) -> Imported
             // pieces split out, which is what the card fields want.
             "NAME" => read_name(head, &body[i..next], &mut person, diagnostics),
             "SEX" => person.sex = line.value.map(String::from),
+            tag if is_bookkeeping(tag) => {}
             tag => diagnostics.push(record_problem(head, &format!("{tag} is not imported yet"))),
         }
         i = next;
@@ -214,6 +218,18 @@ fn read_individual(body: &[Line], diagnostics: &mut Vec<Diagnostic>) -> Imported
     person
 }
 
+/// Whether a tag is a tool's bookkeeping rather than a person's fact, and so may
+/// be dropped without a diagnostic — the same leniency the header gets, extended
+/// to the record. A `_`-prefixed tag is a vendor extension (GEDCOM reserves the
+/// underscore for them); the one this schema has adopted, `_MARNM`, is matched
+/// before this is asked, so only the unrecognised ones — MyHeritage's `_UID`,
+/// `_UPD` and the like — reach here. `RIN` is a standard tag but a database key
+/// all the same. A standard genealogical tag with no field yet (`BIRT`, `FAMS`)
+/// is not bookkeeping: it is a fact, and is named rather than dropped.
+fn is_bookkeeping(tag: &str) -> bool {
+    tag == "RIN" || tag.starts_with('_')
+}
+
 /// Reads the pieces under a `NAME`. `_MARNM` is the MyHeritage extension for a
 /// surname taken at marriage — the same one `gedc build` emits.
 fn read_name(head: &Line, name: &[Line], person: &mut Imported, diagnostics: &mut Vec<Diagnostic>) {
@@ -225,6 +241,7 @@ fn read_name(head: &Line, name: &[Line], person: &mut Imported, diagnostics: &mu
             "GIVN" => person.given = line.value.map(String::from),
             "SURN" => person.surname = line.value.map(String::from),
             "_MARNM" => person.married_surname = line.value.map(String::from),
+            tag if is_bookkeeping(tag) => {}
             tag => diagnostics.push(record_problem(
                 head,
                 &format!("NAME piece {tag} is not imported yet"),

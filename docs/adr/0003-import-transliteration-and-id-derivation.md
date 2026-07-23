@@ -48,7 +48,7 @@ take a numeric suffix in the order the file lists them: `ivan-ivanov`,
 an id has to be. When #1 lands, the year is the better disambiguator and this becomes
 the fallback for the yearless.
 
-## A tag with no card field stops the import, naming it
+## A tag with no card *field* stops the import, naming it — but bookkeeping does not
 
 A `.ged` written by another tool carries tags this schema has no field for yet —
 `BIRT` and `DEAT` dates (#1), the `FAM` records that hold relationships (#4), name
@@ -58,7 +58,21 @@ reports every such tag in one run, names the record it sits in, and writes nothi
 when there is anything to report. Import stays honest about being partial rather than
 lossy, and grows a field at a time as #1 and #4 land.
 
-The header is the exception. `SOUR`, `DEST`, `DATE`, `FILE` and the rest are metadata
-`gedc build` regenerates from scratch — none of it is a person's fact — so import
-reads only `LANG` and the submitter's `NAME` out of the header and ignores the rest
-without complaint. Strict about people, lenient about the envelope they came in.
+The line this draws is between a person's **fact** and the **envelope** it arrived in.
+A fact — a date, a place, a marriage, a name piece — is named when it cannot be
+represented. Envelope is dropped in silence, because regenerating it loses nothing:
+
+- The **header**. `SOUR`, `DEST`, `DATE`, `FILE` and the rest are metadata `gedc build`
+  writes fresh, so import reads only `LANG` and the submitter's `NAME` and ignores the
+  rest.
+- **Record bookkeeping.** A real export is dense with a tool's own database keys and
+  timestamps — MyHeritage alone writes `_UID`, `_UPD`, `RIN` on nearly every `INDI`,
+  and a full tree drowns in them. These are not facts about a person; they are how one
+  program tracked its rows, meaningless to another. So a `_`-prefixed vendor extension
+  (GEDCOM reserves the underscore for exactly this — the one such tag we have adopted,
+  `_MARNM`, is read as the fact it is) and the standard-but-key `RIN` are dropped like
+  header metadata. A standard genealogical tag stays strict: `BIRT` is a fact, and is
+  named.
+
+Strict about people, lenient about the envelope they came in — whether that envelope
+is the file's header or a vendor's bookkeeping stamped onto each record.

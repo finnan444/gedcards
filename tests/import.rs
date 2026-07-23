@@ -96,6 +96,29 @@ fn build_import_build_is_byte_identical() {
 const HEADER: &str = "0 HEAD\n1 CHAR UTF-8\n1 SUBM @SUB1@\n1 LANG Russian\n";
 const SUBMITTER: &str = "0 @SUB1@ SUBM\n1 NAME Иван Иванов\n0 TRLR\n";
 
+/// A tool's bookkeeping — MyHeritage's `_UID`, `_UPD`, the standard `RIN`
+/// record key — is envelope, not a person's fact, so it is dropped without a
+/// diagnostic the way the header's metadata is. The name and sex still import.
+#[test]
+fn tool_bookkeeping_tags_are_dropped_without_a_diagnostic() {
+    let ged = format!(
+        "{HEADER}\
+0 @I1@ INDI\n\
+1 _UPD 3 SEP 2025 02:42:09 GMT -0500\n\
+1 NAME Иван /Иванов/\n\
+2 GIVN Иван\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+1 RIN MH:I1\n\
+1 _UID 68B0683499F445A60024280905725BDC\n\
+{SUBMITTER}"
+    );
+    let (_, cards) = import(&ged).expect("import should succeed");
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].id, "ivan-ivanov");
+    assert_eq!(cards[0].yaml, "name: Иван\nsurname: Иванов\nsex: M\n");
+}
+
 /// A tag with no card field is named rather than dropped: a birth date, a name
 /// piece the card cannot hold, and the whole `FAM` record that would carry
 /// relationships. Every one is reported in the same run.
@@ -128,6 +151,26 @@ fn tags_with_no_card_field_are_reported() {
             ),
         ]
     );
+}
+
+/// A file MyHeritage exports leads with a UTF-8 BOM. It is stripped, so the
+/// `0 HEAD` behind it parses and the header — `LANG` and all — reads normally
+/// rather than the whole file collapsing on the first line.
+#[test]
+fn a_leading_byte_order_mark_is_stripped() {
+    let ged = format!(
+        "\u{feff}{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Иван /Иванов/\n\
+2 GIVN Иван\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+{SUBMITTER}"
+    );
+    let (tree_yaml, cards) = import(&ged).expect("import should succeed");
+    assert_eq!(tree_yaml, "submitter: Иван Иванов\nlanguage: Russian\n");
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].id, "ivan-ivanov");
 }
 
 /// Two people whose names transliterate to the same slug, with no birth year yet

@@ -276,10 +276,13 @@ with a numeric suffix for namesakes. The scheme, and why it is not GOST or ICAO,
 
 > **Import is partial, and says so.** Today it reads the name (`NAME` with `GIVN`,
 > `SURN` and `_MARNM`) and `SEX`. Birth and death dates and the `FAM` records that
-> carry relationships have no card field yet — so rather than drop them silently and
-> lose them on the next build, import stops and names every tag it cannot represent,
-> writing nothing. Those fields land as the format is parsed further. A patronymic is
-> a casualty of the same partiality in reverse: `GIVN` fuses it into the given name
+> carry relationships have no card field yet — so rather than drop such a fact silently
+> and lose it on the next build, import stops and names every one it cannot represent,
+> writing nothing. Those fields land as the format is parsed further. A tool's own
+> bookkeeping is the exception: a vendor's `_UID`, `_UPD` and `RIN` record keys are not
+> facts about a person, so they are dropped in silence like the header metadata (see
+> [ADR 0003](docs/adr/0003-import-transliteration-and-id-derivation.md)). A patronymic
+> is a casualty of the same partiality in reverse: `GIVN` fuses it into the given name
 > with no way to split it back out, so it stays in `name` rather than being guessed at
 > (see [ADR 0002](docs/adr/0002-patronymic-joins-the-given-name.md)).
 
@@ -373,7 +376,7 @@ match compile(config, &cards) {
 ```bash
 just          # list recipes
 just build    # build the binary
-just test     # run the test suite (68 tests)
+just test     # run the test suite (70 tests)
 just lint     # rustfmt + clippy
 just check    # lint + test
 ```
