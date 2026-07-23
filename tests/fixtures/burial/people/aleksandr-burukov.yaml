@@ -1,0 +1,13 @@
+name: Александр
+surname: Буруков
+sex: M
+birth:
+  date: 1947-09-22
+  place: Москва, Россия
+death:
+  date: 2023-08-28
+  place: Москва, Россия
+  age: 75
+  cause: Stroke
+burial:
+  place: Николо-Архангельское кладбище

@@ -1,0 +1,10 @@
+name: Павел
+surname: Соколов
+sex: M
+birth:
+  date: 1930
+death:
+  date: 2001-03-14
+  age: 71
+burial:
+  date: 2001-03-18

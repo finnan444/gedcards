@@ -41,15 +41,13 @@ fn load_fixture(name: &str) -> (String, Vec<Card>) {
 }
 
 /// A golden import: a MyHeritage-shaped export — its own header, `_MARNM`, a
-/// patronymic fused into `GIVN` — read into the cards checked in beside it. The
-/// export is trimmed to names and sex, the fields import has a home for; dates
-/// and families arrive with issues #1 and #4.
+/// patronymic fused into `GIVN` — read into the cards checked in beside it.
 #[test]
 fn myheritage_export_imports_to_the_expected_cards() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/import/myheritage");
     let ged = fs::read_to_string(dir.join("family.ged")).unwrap();
 
-    let (tree_yaml, cards) = import(&ged).expect("import should succeed");
+    let (tree_yaml, cards) = import(&ged, None).expect("import should succeed");
 
     assert_eq!(
         tree_yaml,
@@ -78,15 +76,23 @@ fn myheritage_export_imports_to_the_expected_cards() {
 /// The round trip: build a fixture, import its output, build again — the two
 /// `.ged` files are byte-identical. The imported ids differ from the authored
 /// ones (a patronymic drops out, `Мария` transliterates to `mariya`), but they
-/// sort the same and no id appears in the output, so the bytes match. Both
-/// fixtures are names and sex only, the shape import round-trips today.
+/// sort the same and no id appears in the output, so the bytes match. Every
+/// fixture that compiles round-trips: names, dates and events, the burial with
+/// its age and cause, and the families with their marriages and divorces.
 #[test]
 fn build_import_build_is_byte_identical() {
-    for fixture in ["full-names", "three-people"] {
+    for fixture in [
+        "full-names",
+        "three-people",
+        "dates",
+        "burial",
+        "relationships",
+        "remarriage",
+    ] {
         let (config, cards) = load_fixture(fixture);
         let first = compile(&config, &cards).expect("first build should succeed");
 
-        let (tree_yaml, imported) = import(&first).expect("import should succeed");
+        let (tree_yaml, imported) = import(&first, None).expect("import should succeed");
         let second = compile(&tree_yaml, &imported).expect("second build should succeed");
 
         assert_eq!(first, second, "round trip differs for {fixture}");
@@ -96,9 +102,33 @@ fn build_import_build_is_byte_identical() {
 const HEADER: &str = "0 HEAD\n1 CHAR UTF-8\n1 SUBM @SUB1@\n1 LANG Russian\n";
 const SUBMITTER: &str = "0 @SUB1@ SUBM\n1 NAME Иван Иванов\n0 TRLR\n";
 
-/// A tag with no card field is named rather than dropped: a birth date, a name
-/// piece the card cannot hold, and the whole `FAM` record that would carry
-/// relationships. Every one is reported in the same run.
+/// A tool's bookkeeping — MyHeritage's `_UID`, `_UPD`, the standard `RIN`
+/// record key — is envelope, not a person's fact, so it is dropped without a
+/// diagnostic the way the header's metadata is. The name and sex still import.
+#[test]
+fn tool_bookkeeping_tags_are_dropped_without_a_diagnostic() {
+    let ged = format!(
+        "{HEADER}\
+0 @I1@ INDI\n\
+1 _UPD 3 SEP 2025 02:42:09 GMT -0500\n\
+1 NAME Иван /Иванов/\n\
+2 GIVN Иван\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+1 RIN MH:I1\n\
+1 _UID 68B0683499F445A60024280905725BDC\n\
+{SUBMITTER}"
+    );
+    let (_, cards) = import(&ged, None).expect("import should succeed");
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].id, "ivan-ivanov");
+    assert_eq!(cards[0].yaml, "name: Иван\nsurname: Иванов\nsex: M\n");
+}
+
+/// A tag with no card field is still named rather than dropped, even now that
+/// events and families import: a name piece the card cannot hold, a standard
+/// tag with no field, an event detail with none, and a date in a form the card
+/// grammar has no room for. Every one is reported in the same run.
 #[test]
 fn tags_with_no_card_field_are_reported() {
     let ged = format!(
@@ -109,25 +139,133 @@ fn tags_with_no_card_field_are_reported() {
 2 SURN Иванов\n\
 2 NPFX Dr\n\
 1 SEX M\n\
+1 OCCU Blacksmith\n\
 1 BIRT\n\
-2 DATE 12 MAR 1947\n\
-0 @F1@ FAM\n\
-1 HUSB @I1@\n\
+2 DATE BET 1900 AND 1910\n\
+2 TIME 09:00\n\
 {SUBMITTER}"
     );
-    let diagnostics = import(&ged).err().unwrap();
+    let diagnostics = import(&ged, None).err().unwrap();
     assert_eq!(
         diagnostics,
         vec![
             diagnostic(Some("@I1@"), None, "NAME piece NPFX is not imported yet"),
-            diagnostic(Some("@I1@"), None, "BIRT is not imported yet"),
+            diagnostic(Some("@I1@"), None, "OCCU is not imported yet"),
             diagnostic(
-                Some("@F1@"),
+                Some("@I1@"),
                 None,
-                "relationships are not imported yet — they arrive with FAM records (#4)"
+                "BIRT date \"BET 1900 AND 1910\" is not a form a card can hold"
             ),
+            diagnostic(Some("@I1@"), None, "BIRT detail TIME is not imported yet"),
         ]
     );
+}
+
+/// Events and a family read back into the card fields that hold them: the birth,
+/// death (with its age and cause) and burial blocks, and the parents and the
+/// marriage the FAM record carries. The marriage lands on one spouse's card.
+#[test]
+fn events_and_relationships_import() {
+    let ged = format!(
+        "{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Пётр /Иванов/\n\
+2 GIVN Пётр\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+1 BIRT\n\
+2 DATE 12 MAR 1947\n\
+2 PLAC Тверь\n\
+1 DEAT Y\n\
+2 DATE 2020\n\
+2 AGE 73\n\
+2 CAUS Stroke\n\
+1 BURI\n\
+2 PLAC Москва\n\
+0 @I2@ INDI\n\
+1 NAME Анна /Петрова/\n\
+2 GIVN Анна\n\
+2 SURN Петрова\n\
+1 SEX F\n\
+0 @I3@ INDI\n\
+1 NAME Ольга /Иванова/\n\
+2 GIVN Ольга\n\
+2 SURN Иванова\n\
+1 SEX F\n\
+0 @F1@ FAM\n\
+1 MARR\n\
+2 DATE 1970\n\
+1 DIV Y\n\
+1 HUSB @I1@\n\
+1 WIFE @I2@\n\
+1 CHIL @I3@\n\
+{SUBMITTER}"
+    );
+    let (_, cards) = import(&ged, None).expect("import should succeed");
+    let by_id: HashMap<&str, &str> = cards
+        .iter()
+        .map(|card| (card.id.as_str(), card.yaml.as_str()))
+        .collect();
+    assert_eq!(
+        by_id["pyotr-ivanov"],
+        "name: Пётр\nsurname: Иванов\nsex: M\n\
+birth:\n  date: 1947-03-12\n  place: Тверь\n\
+death:\n  date: 2020\n  age: 73\n  cause: Stroke\n\
+burial:\n  place: Москва\n\
+marriage:\n  spouse: anna-petrova\n  date: 1970\n  divorce:\n"
+    );
+    assert_eq!(
+        by_id["olga-ivanova"],
+        "name: Ольга\nsurname: Иванова\nsex: F\nfather: pyotr-ivanov\nmother: anna-petrova\n"
+    );
+}
+
+/// Two people who share a name and a birth year both keep it: the first takes the
+/// bare slug, the namesake the birth-year suffix the README's ids use.
+#[test]
+fn a_namesake_takes_the_birth_year_suffix() {
+    let ged = format!(
+        "{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Иван /Иванов/\n\
+2 GIVN Иван\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+1 BIRT\n\
+2 DATE 1910\n\
+0 @I2@ INDI\n\
+1 NAME Иван /Иванов/\n\
+2 GIVN Иван\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+1 BIRT\n\
+2 DATE 3 AUG 1947\n\
+{SUBMITTER}"
+    );
+    let (_, cards) = import(&ged, None).expect("import should succeed");
+    let mut ids: Vec<&str> = cards.iter().map(|card| card.id.as_str()).collect();
+    ids.sort();
+    assert_eq!(ids, vec!["ivan-ivanov", "ivan-ivanov-1947"]);
+}
+
+/// A file MyHeritage exports leads with a UTF-8 BOM. It is stripped, so the
+/// `0 HEAD` behind it parses and the header — `LANG` and all — reads normally
+/// rather than the whole file collapsing on the first line.
+#[test]
+fn a_leading_byte_order_mark_is_stripped() {
+    let ged = format!(
+        "\u{feff}{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Иван /Иванов/\n\
+2 GIVN Иван\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+{SUBMITTER}"
+    );
+    let (tree_yaml, cards) = import(&ged, None).expect("import should succeed");
+    assert_eq!(tree_yaml, "submitter: Иван Иванов\nlanguage: Russian\n");
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].id, "ivan-ivanov");
 }
 
 /// Two people whose names transliterate to the same slug, with no birth year yet
@@ -149,7 +287,7 @@ fn namesakes_get_a_numeric_suffix() {
 1 SEX M\n\
 {SUBMITTER}"
     );
-    let (_, cards) = import(&ged).expect("import should succeed");
+    let (_, cards) = import(&ged, None).expect("import should succeed");
     let ids: Vec<&str> = cards.iter().map(|card| card.id.as_str()).collect();
     assert_eq!(ids, vec!["ivan-ivanov", "ivan-ivanov-2"]);
 }
@@ -167,7 +305,7 @@ fn a_patronymic_stays_in_the_name_and_out_of_the_id() {
 1 SEX M\n\
 {SUBMITTER}"
     );
-    let (_, cards) = import(&ged).expect("import should succeed");
+    let (_, cards) = import(&ged, None).expect("import should succeed");
     assert_eq!(cards.len(), 1);
     assert_eq!(cards[0].id, "pyotr-ivanov");
     assert_eq!(
@@ -187,7 +325,7 @@ fn a_header_without_language_or_submitter_is_reported() {
 2 SURN Иванов\n\
 1 SEX M\n\
 0 TRLR\n";
-    let diagnostics = import(ged).err().unwrap();
+    let diagnostics = import(ged, None).err().unwrap();
     assert_eq!(
         diagnostics,
         vec![
@@ -195,8 +333,38 @@ fn a_header_without_language_or_submitter_is_reported() {
             diagnostic(
                 None,
                 Some("submitter"),
-                "no SUBM record with a NAME to import"
+                "no SUBM record with a NAME to import, and no --submitter given"
             ),
         ]
     );
+}
+
+/// A supplied submitter stands in for one the file lacks — the common case for an
+/// export — and wins over one it carries, since it names the tree's new owner.
+#[test]
+fn a_supplied_submitter_fills_in_and_overrides() {
+    // No SUBM record at all: the flag is the only submitter there is.
+    let ged = "0 HEAD\n1 CHAR UTF-8\n1 LANG Russian\n\
+0 @I1@ INDI\n\
+1 NAME Иван /Иванов/\n\
+2 GIVN Иван\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+0 TRLR\n";
+    let (tree_yaml, cards) = import(ged, Some("Пётр Рыковский")).expect("import should succeed");
+    assert_eq!(tree_yaml, "submitter: Пётр Рыковский\nlanguage: Russian\n");
+    assert_eq!(cards.len(), 1);
+
+    // A file with its own SUBM: the flag still wins.
+    let with_subm = format!(
+        "{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Иван /Иванов/\n\
+2 GIVN Иван\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+{SUBMITTER}"
+    );
+    let (tree_yaml, _) = import(&with_subm, Some("Пётр Рыковский")).expect("import should succeed");
+    assert_eq!(tree_yaml, "submitter: Пётр Рыковский\nlanguage: Russian\n");
 }

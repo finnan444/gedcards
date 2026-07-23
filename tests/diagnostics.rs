@@ -368,7 +368,7 @@ fn non_mapping_event_is_reported() {
         vec![diagnostic(
             Some("ivan-petrov"),
             Some("birth"),
-            "expected a block with a date and/or a place"
+            "expected a block with a date, a place, an age and/or a cause"
         )]
     );
 }
@@ -386,7 +386,7 @@ fn empty_event_block_is_reported() {
         vec![diagnostic(
             Some("ivan-petrov"),
             Some("birth"),
-            "needs a date or a place"
+            "needs a date, a place, an age or a cause"
         )]
     );
 }

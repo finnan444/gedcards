@@ -38,27 +38,42 @@ fine: an id appears nowhere in the emitted `.ged` — cross-references are `@I1@
 sorted position — so as long as the derived ids sort in the same order, a
 build → import → build round trip is byte-identical regardless.
 
-## Namesakes get a numeric suffix in file order
+## Namesakes get the birth-year suffix, and a numeric one where that will not do
 
-Two people whose names transliterate to the same slug collide. The README's answer
-is a birth-year suffix (`pyotr-ivanov-1947`), but birth dates are not imported yet
-(they arrive with #1), so there is no year to suffix with. Until then, collisions
-take a numeric suffix in the order the file lists them: `ivan-ivanov`,
-`ivan-ivanov-2`, `ivan-ivanov-3`. It is deterministic for a given file, which is all
-an id has to be. When #1 lands, the year is the better disambiguator and this becomes
-the fallback for the yearless.
+Two people whose names transliterate to the same slug collide. The README's answer is
+a birth-year suffix (`pyotr-ivanov-1947`), and birth dates now import, so that is what
+import uses: the first of a name keeps the bare slug, and a namesake gains the year of
+their birth. Where even that will not separate them — two namesakes born the same year,
+or one with no birth date — a numeric suffix in file order is the last resort:
+`ivan-ivanov`, `ivan-ivanov-2`, `ivan-ivanov-3`. Both are deterministic for a given
+file, which is all an id has to be.
 
-## A tag with no card field stops the import, naming it
+## A tag with no card *field* stops the import, naming it — but bookkeeping does not
 
-A `.ged` written by another tool carries tags this schema has no field for yet —
-`BIRT` and `DEAT` dates (#1), the `FAM` records that hold relationships (#4), name
-pieces like `NPFX`. Dropping them silently would mean the next `gedc build` quietly
+A `.ged` written by another tool carries tags this schema still has no field for —
+name pieces like `NPFX`, a `SOUR` citation, an `OCCU`, a date in a form the card
+grammar cannot spell. Dropping them silently would mean the next `gedc build` quietly
 emits a `.ged` missing facts the original had. So import does what `compile` does:
 reports every such tag in one run, names the record it sits in, and writes nothing
 when there is anything to report. Import stays honest about being partial rather than
-lossy, and grows a field at a time as #1 and #4 land.
+lossy, and grows a field at a time — the birth, death and burial events, and the `FAM`
+records that hold relationships, have since grown theirs.
 
-The header is the exception. `SOUR`, `DEST`, `DATE`, `FILE` and the rest are metadata
-`gedc build` regenerates from scratch — none of it is a person's fact — so import
-reads only `LANG` and the submitter's `NAME` out of the header and ignores the rest
-without complaint. Strict about people, lenient about the envelope they came in.
+The line this draws is between a person's **fact** and the **envelope** it arrived in.
+A fact — a date, a place, a marriage, a name piece — is named when it cannot be
+represented. Envelope is dropped in silence, because regenerating it loses nothing:
+
+- The **header**. `SOUR`, `DEST`, `DATE`, `FILE` and the rest are metadata `gedc build`
+  writes fresh, so import reads only `LANG` and the submitter's `NAME` and ignores the
+  rest.
+- **Record bookkeeping.** A real export is dense with a tool's own database keys and
+  timestamps — MyHeritage alone writes `_UID`, `_UPD`, `RIN` on nearly every `INDI`,
+  and a full tree drowns in them. These are not facts about a person; they are how one
+  program tracked its rows, meaningless to another. So a `_`-prefixed vendor extension
+  (GEDCOM reserves the underscore for exactly this — the one such tag we have adopted,
+  `_MARNM`, is read as the fact it is) and the standard-but-key `RIN` are dropped like
+  header metadata. A standard genealogical tag stays strict: `BIRT` is a fact, and is
+  named.
+
+Strict about people, lenient about the envelope they came in — whether that envelope
+is the file's header or a vendor's bookkeeping stamped onto each record.

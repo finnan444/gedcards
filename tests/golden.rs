@@ -64,6 +64,16 @@ fn dates_fixture_compiles_to_expected_ged() {
     assert_eq!(ged, expected("dates"));
 }
 
+/// The burial event, and the death's `age` and `cause`: a death with all four
+/// details and a burial with only a place, a cause-only death that asserts with
+/// `DEAT Y`, and a burial carrying just a date.
+#[test]
+fn burial_fixture_compiles_to_expected_ged() {
+    let (config_yaml, cards) = load_fixture("burial");
+    let ged = compile(&config_yaml, &cards).expect("compile should succeed");
+    assert_eq!(ged, expected("burial"));
+}
+
 /// One couple: the marriage declared on the husband's card, four children
 /// naming the pair, and the child order that follows from their birth dates
 /// rather than from their ids.

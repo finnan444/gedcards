@@ -43,6 +43,9 @@ const PROLOGUE: &str = r##"{
     "death": {
       "$ref": "#/definitions/event"
     },
+    "burial": {
+      "$ref": "#/definitions/event"
+    },
 "##;
 
 /// The marriage block, down to its `spouse`.
@@ -66,8 +69,11 @@ const MARRIAGE: &str = r##"    "marriage": {
 /// since that is what YAML reads `1995` as — of four digits, because an
 /// integer reaches the compiler through `to_string`, where `0001` is `1`.
 ///
-/// An event block carries a date, a place, or both — `minProperties` says
-/// "at least one of them", the two being all this block may hold.
+/// An event block carries a date, a place, or both, and on a death an `age`
+/// and a `cause` besides — `minProperties` says "at least one of them", the
+/// four being all this block may hold. `age` is a string or an integer, since
+/// a bare `age: 75` reads as a YAML integer the compiler coerces, the way a
+/// bare year does.
 ///
 /// The divorce inside a marriage is the one block that may hold neither, so it
 /// cannot point at that definition: `null` is the empty block written the short
@@ -119,6 +125,15 @@ const EPILOGUE: &str = r##"        "date": {
           "$ref": "#/definitions/date"
         },
         "place": {
+          "type": "string"
+        },
+        "age": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "cause": {
           "type": "string"
         }
       }

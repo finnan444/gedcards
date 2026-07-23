@@ -165,7 +165,8 @@ alone: whether the name was kept afterwards is not something the card says eithe
 
 ## Dates and events
 
-`birth` and `death` are blocks carrying a `date`, a `place`, or both:
+`birth`, `death` and `burial` are blocks carrying a `date`, a `place`, or both.
+A `death` may also carry an `age` at death and a `cause`:
 
 ```yaml
 name: Пётр
@@ -175,8 +176,18 @@ birth:
   date: 1947-03-12
   place: Тверь
 death:
+  date: 2020-08-28
   place: Москва
+  age: 73
+  cause: Stroke
+burial:
+  place: Николо-Архангельское кладбище
 ```
+
+`age` and `cause` are GEDCOM's event details (`2 AGE`, `2 CAUS`); they read
+naturally on a death, and a death carrying only them, with no date or place,
+compiles to `1 DEAT Y` with the details beneath. A `burial` is the same event
+block as `birth` and `death`, emitted as `BURI`.
 
 A date is written as an ISO subset, optionally prefixed with an imprecision marker:
 
@@ -269,19 +280,35 @@ mkdir my-tree && cd my-tree
 gedc import ~/Downloads/my-heritage-export.ged
 ```
 
+`tree.yaml` records a submitter — the tree's owner — and an export often carries none,
+since that is you rather than anyone in the file. Name yourself with `--submitter`, and
+it fills in (or overrides) what the file left out:
+
+```bash
+gedc import --submitter "Пётр Рыковский" ~/Downloads/my-heritage-export.ged
+```
+
 Each person's id is derived from their name — the first given name and the surname,
 transliterated to a latin slug (`Пётр Сергеевич /Иванов/` becomes `pyotr-ivanov`),
-with a numeric suffix for namesakes. The scheme, and why it is not GOST or ICAO, is in
+with a birth-year suffix for namesakes (`pyotr-ivanov-1947`), or a numeric one where
+the year is unknown or shared. The scheme, and why it is not GOST or ICAO, is in
 [ADR 0003](docs/adr/0003-import-transliteration-and-id-derivation.md).
 
-> **Import is partial, and says so.** Today it reads the name (`NAME` with `GIVN`,
-> `SURN` and `_MARNM`) and `SEX`. Birth and death dates and the `FAM` records that
-> carry relationships have no card field yet — so rather than drop them silently and
-> lose them on the next build, import stops and names every tag it cannot represent,
-> writing nothing. Those fields land as the format is parsed further. A patronymic is
-> a casualty of the same partiality in reverse: `GIVN` fuses it into the given name
-> with no way to split it back out, so it stays in `name` rather than being guessed at
-> (see [ADR 0002](docs/adr/0002-patronymic-joins-the-given-name.md)).
+> **Import reads back what a card can hold, and names the rest.** It reads the name
+> (`NAME` with `GIVN`, `SURN` and `_MARNM`) and `SEX`; the `BIRT`, `DEAT` and `BURI`
+> events with their dates, places, ages and causes; and the `FAM` records — a family's
+> `HUSB` and `WIFE` become the `father` and `mother` on each child's card, and its
+> `MARR`/`DIV` become a `marriage` block on one spouse's. A tag with no card field yet
+> (a name piece like `NPFX`, a `SOUR` citation, an `OCCU`) is not dropped silently — it
+> would be lost on the next build — but named, so import writes nothing rather than
+> less than the file held. A tool's own bookkeeping is the exception: a vendor's `_UID`,
+> `_UPD` and `RIN` record keys are not facts about a person, so they are dropped in
+> silence like the header metadata (see
+> [ADR 0003](docs/adr/0003-import-transliteration-and-id-derivation.md)). A patronymic
+> is a casualty of a different partiality: `GIVN` fuses it into the given name with no
+> way to split it back out, so it stays in `name` rather than being guessed at (see
+> [ADR 0002](docs/adr/0002-patronymic-joins-the-given-name.md)). A submitter name the
+> file does not carry is named too: `tree.yaml` needs one, and import will not invent it.
 
 Import refuses to run where a `tree.yaml` already sits, rather than write over cards
 it did not author.
@@ -373,7 +400,7 @@ match compile(config, &cards) {
 ```bash
 just          # list recipes
 just build    # build the binary
-just test     # run the test suite (68 tests)
+just test     # run the test suite (70 tests)
 just lint     # rustfmt + clippy
 just check    # lint + test
 ```
