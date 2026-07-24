@@ -12,17 +12,23 @@
 2 SURN Иванов
 1 SEX M
 0 @I2@ INDI
+1 NAME Мария /Иванова/
+2 TYPE married
+2 GIVN Мария
+2 SURN Иванова
+1 SEX F
+0 @I3@ INDI
 1 NAME Анна /Петрова/
 2 GIVN Анна
 2 SURN Петрова
 1 SEX F
-0 @I3@ INDI
+0 @I4@ INDI
 1 NAME Мария /Сидорова/
 2 GIVN Мария
 2 SURN Сидорова
 2 _MARNM Иванова
 1 SEX F
-0 @I4@ INDI
+0 @I5@ INDI
 1 NAME Ольга Сергеевна /Смирнова/
 2 GIVN Ольга Сергеевна
 2 SURN Смирнова

@@ -161,6 +161,33 @@ the extension MyHeritage uses, which is what makes maiden names display correctl
 import. It is the surname taken at marriage, and a [divorce](#relationships) leaves it
 alone: whether the name was kept afterwards is not something the card says either way.
 
+`surname` may be left out when only the married name is known — a woman a tree
+remembers by the name she took at marriage, whose birth surname was never learned:
+
+```yaml
+name: Мария
+married_surname: Иванова
+sex: F
+```
+
+A card carries at least one of the two; with neither, `surname: required field is
+missing` is the answer. `married_surname` then has nothing to contrast with, so it is
+the name emitted — `SURN` and the `NAME` line both — and no `_MARNM` is written. The
+name is tagged `2 TYPE married`, GEDCOM's own way of saying this name was taken at
+marriage rather than given at birth, which is also what lets `gedc import` read it
+back into `married_surname` instead of mistaking it for a birth surname:
+
+```
+1 NAME Мария /Иванова/
+2 TYPE married
+2 GIVN Мария
+2 SURN Иванова
+1 SEX F
+```
+
+Why the type rather than a `_MARNM` standing on its own is in
+[ADR 0004](docs/adr/0004-a-married-surname-without-a-birth-one.md).
+
 ---
 
 ## Dates and events
@@ -277,7 +304,9 @@ An id is the card's file name without the extension, and it is what `father`, `m
 and `spouse` reference. Use a latin transliteration, surname first — `ivanov-ivan`, and
 for namesakes a birth-year suffix, `ivanov-pyotr-1947`. Lowercase latin letters, digits
 and single inner hyphens only. The surname leads so that `people/` sorts into families
-rather than scattering by given name — the same order `gedc import` derives.
+rather than scattering by given name — the same order `gedc import` derives. Lead with
+the surname at birth; for a card that carries only a [`married_surname`](#names), lead
+with that, since it is the only surname there is.
 
 ---
 
@@ -307,7 +336,8 @@ the year is unknown or shared. The scheme, and why it is not GOST or ICAO, is in
 [ADR 0003](docs/adr/0003-import-transliteration-and-id-derivation.md).
 
 > **Import reads back what a card can hold, and names the rest.** It reads the name
-> (`NAME` with `GIVN`, `SURN` and `_MARNM`) and `SEX`; the `BIRT`, `DEAT` and `BURI`
+> (`NAME` with `GIVN`, `SURN`, `_MARNM`, and a `TYPE married` that makes the `SURN` a
+> [`married_surname`](#names)) and `SEX`; the `BIRT`, `DEAT` and `BURI`
 > events with their dates, places, coordinates, notes, ages and causes; and the `FAM`
 > records — a family's
 > `HUSB` and `WIFE` become the `father` and `mother` on each child's card, and its

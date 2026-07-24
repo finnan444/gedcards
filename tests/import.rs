@@ -371,6 +371,59 @@ fn a_patronymic_stays_in_the_name_and_out_of_the_id() {
     );
 }
 
+/// A `NAME` the file types as the married one carries the surname taken at
+/// marriage, not a name at birth: its `SURN` comes back as `married_surname` and
+/// the card is left without a `surname`, the shape `gedc build` writes for a
+/// person whose birth surname was never learned. The id falls back to the same
+/// surname. 5.5.1 spells the type in lower case and 7.0 in upper; both read.
+#[test]
+fn a_name_typed_married_imports_as_the_married_surname() {
+    for spelling in ["married", "MARRIED"] {
+        let ged = format!(
+            "{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Мария /Иванова/\n\
+2 TYPE {spelling}\n\
+2 GIVN Мария\n\
+2 SURN Иванова\n\
+1 SEX F\n\
+{SUBMITTER}"
+        );
+        let (_, cards) = import(&ged, None).expect("import should succeed");
+        assert_eq!(cards.len(), 1);
+        assert_eq!(cards[0].id, "ivanova-mariya");
+        assert_eq!(
+            cards[0].yaml,
+            "name: Мария\nmarried_surname: Иванова\nsex: F\n"
+        );
+    }
+}
+
+/// Every other name type is a distinction the card cannot hold, so the `NAME` is
+/// named rather than read as a name at birth it may not be.
+#[test]
+fn a_name_of_another_type_is_reported() {
+    let ged = format!(
+        "{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Иван /Иванов/\n\
+2 TYPE immigrant\n\
+2 GIVN Иван\n\
+2 SURN Иванов\n\
+1 SEX M\n\
+{SUBMITTER}"
+    );
+    let diagnostics = import(&ged, None).err().unwrap();
+    assert_eq!(
+        diagnostics,
+        vec![diagnostic(
+            Some("@I1@"),
+            None,
+            "NAME of type immigrant is not imported yet"
+        )]
+    );
+}
+
 /// tree.yaml needs a language and a submitter; a header without them is named
 /// rather than compiled into a tree that will not build.
 #[test]

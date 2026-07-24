@@ -78,6 +78,15 @@ struct Individual<'a> {
     burial: Option<RawEvent>,
 }
 
+impl Individual<'_> {
+    /// The surname this person is known by: the one at birth, or — when the file
+    /// gives only a name taken at marriage — that one, standing in its place the
+    /// same way the card's own fields do.
+    fn surname(&self) -> Option<&str> {
+        self.surname.as_deref().or(self.married_surname.as_deref())
+    }
+}
+
 /// A family as import recovers it. The spouses and children are still xrefs;
 /// they become card ids once every person has one. `marriage` and `divorce` are
 /// `Some` whenever the `MARR`/`DIV` tag was present, even bare (`1 MARR Y`),
@@ -287,7 +296,7 @@ fn read_individual<'a>(body: &'a [Line], diagnostics: &mut Vec<Diagnostic>) -> I
     if person.given.is_none() {
         diagnostics.push(record_problem(head, "no NAME with a GIVN to import"));
     }
-    if person.surname.is_none() {
+    if person.surname().is_none() {
         diagnostics.push(record_problem(head, "no NAME with a SURN to import"));
     }
     if person.sex.is_none() {
@@ -360,25 +369,51 @@ fn nested<'a, 'b>(lines: &'b [Line<'a>], level: u8) -> Vec<(&'b Line<'a>, &'b [L
 
 /// Reads the pieces under a `NAME`. `_MARNM` is the MyHeritage extension for a
 /// surname taken at marriage — the same one `gedc build` emits.
+///
+/// `TYPE married` is the standard way of saying the same thing about the whole
+/// name: this one was taken at marriage, so its `SURN` is the card's
+/// `married_surname` and the card has no birth surname at all — what `gedc build`
+/// writes for a person whose birth surname was never learned. Every other name
+/// type is a distinction no card field holds, so the name is named rather than
+/// read as a name at birth it may not be.
 fn read_name(
     head: &Line,
     name: &[Line],
     person: &mut Individual,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let mut surname = None;
+    let mut taken_at_marriage = false;
     for line in name {
         if line.level != 2 {
             continue;
         }
         match line.tag {
             "GIVN" => person.given = line.value.map(String::from),
-            "SURN" => person.surname = line.value.map(String::from),
+            "SURN" => surname = line.value.map(String::from),
             "_MARNM" => person.married_surname = line.value.map(String::from),
+            // 5.5.1 spells the enumerated types in lower case and 7.0 in upper;
+            // a file written to either version reads the same here.
+            "TYPE" => match line.value {
+                Some(value) if value.eq_ignore_ascii_case("married") => taken_at_marriage = true,
+                Some(value) => diagnostics.push(record_problem(
+                    head,
+                    &format!("NAME of type {value} is not imported yet"),
+                )),
+                None => {}
+            },
             tag if is_bookkeeping(tag) => {}
             tag => diagnostics.push(record_problem(
                 head,
                 &format!("NAME piece {tag} is not imported yet"),
             )),
+        }
+    }
+    if let Some(surname) = surname {
+        if taken_at_marriage {
+            person.married_surname = Some(surname);
+        } else {
+            person.surname = Some(surname);
         }
     }
 }
@@ -596,7 +631,7 @@ fn assign_ids<'a>(
     for person in individuals {
         // A person missing a name already carries its own diagnostic; skip the
         // id it cannot have.
-        let (Some(given), Some(surname)) = (&person.given, &person.surname) else {
+        let (Some(given), Some(surname)) = (&person.given, person.surname()) else {
             continue;
         };
         let Some(base) = derive_id(given, surname) else {
@@ -796,11 +831,13 @@ fn card_yaml(
     mother: Option<String>,
     marriage: Option<&CardMarriage>,
 ) -> String {
-    let mut yaml = format!(
-        "name: {}\nsurname: {}\n",
-        person.given.as_deref().unwrap_or(""),
-        person.surname.as_deref().unwrap_or(""),
-    );
+    let mut yaml = format!("name: {}\n", person.given.as_deref().unwrap_or(""));
+    // A person the file names only by a surname taken at marriage has no birth
+    // surname to write, so the card carries `married_surname` on its own — the
+    // same shape a card whose birth surname was never learned is authored in.
+    if let Some(surname) = &person.surname {
+        yaml.push_str(&format!("surname: {surname}\n"));
+    }
     if let Some(married) = &person.married_surname {
         yaml.push_str(&format!("married_surname: {married}\n"));
     }

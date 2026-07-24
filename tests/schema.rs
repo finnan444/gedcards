@@ -132,6 +132,17 @@ fn the_required_fields_are_required() {
     assert!(!schema.accepts("name:\nsurname: Петров\nsex: M\n"));
 }
 
+/// `surname` may be left out when `married_surname` stands in for it, so the
+/// editor accepts the same card the compiler does — but a card with neither
+/// surname is still refused.
+#[test]
+fn a_married_surname_stands_in_for_a_missing_surname() {
+    let schema = Schema::of(&couple());
+    assert!(schema.accepts("name: Мария\nmarried_surname: Иванова\nsex: F\n"));
+    assert!(!schema.accepts("name: Мария\nsex: F\n"));
+    assert!(!schema.accepts("name: Мария\nmarried_surname:\nsex: F\n"));
+}
+
 #[test]
 fn sex_is_m_or_f() {
     let schema = Schema::of(&couple());

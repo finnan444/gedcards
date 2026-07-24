@@ -8,6 +8,11 @@ use crate::{Card, parse_mapping, take_string};
 
 /// Everything up to `father`. `birth` and `death` are the same event block,
 /// so both point at the one definition rather than repeating it.
+///
+/// A surname is required, but which one is not: `surname` is the one at birth
+/// and a card normally carries it, while a card for a person known only by the
+/// name they took at marriage carries `married_surname` in its place. `anyOf`
+/// is how draft-07 spells "at least one of these two keys".
 const PROLOGUE: &str = r##"{
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "gedcards person card",
@@ -15,8 +20,19 @@ const PROLOGUE: &str = r##"{
   "additionalProperties": false,
   "required": [
     "name",
-    "surname",
     "sex"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "surname"
+      ]
+    },
+    {
+      "required": [
+        "married_surname"
+      ]
+    }
   ],
   "properties": {
     "name": {
