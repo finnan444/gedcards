@@ -298,6 +298,24 @@ error. So is naming an id no card has.
 
 ---
 
+## Notes
+
+A card carries a top-level `note` for anything about the person themselves that no
+other field holds — how they were remembered, a story worth keeping:
+
+```yaml
+name: Александра
+surname: Волкова
+sex: F
+note: Любимая бабушка, всегда звали бабушкой Шурой — жили с мамой в коммуналке, вкусно готовила
+```
+
+It is one free line, emitted as the individual's own `1 NOTE`. It is not an event's
+[`note`](#dates-and-events): that one hangs on a date or a place — how to find a grave,
+say — while this one is the whole person's, and hangs on nothing.
+
+---
+
 ## Ids
 
 An id is the card's file name without the extension, and it is what `father`, `mother`
@@ -338,7 +356,8 @@ the year is unknown or shared. The scheme, and why it is not GOST or ICAO, is in
 > **Import reads back what a card can hold, and names the rest.** It reads the name
 > (`NAME` with `GIVN`, `SURN`, `_MARNM`, and a `TYPE married` that makes the `SURN` a
 > [`married_surname`](#names)) and `SEX`; the `BIRT`, `DEAT` and `BURI`
-> events with their dates, places, coordinates, notes, ages and causes; and the `FAM`
+> events with their dates, places, coordinates, notes, ages and causes; a `NOTE` on the
+> person as the card's own [`note`](#notes); and the `FAM`
 > records — a family's
 > `HUSB` and `WIFE` become the `father` and `mother` on each child's card, and its
 > `MARR`/`DIV` become a `marriage` block on one spouse's. A tag with no card field yet

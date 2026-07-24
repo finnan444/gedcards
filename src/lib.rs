@@ -114,6 +114,10 @@ struct Person {
     father: Option<String>,
     mother: Option<String>,
     marriage: Option<Marriage>,
+    /// A freeform line about the person themselves, for what no field holds —
+    /// how they were remembered, say. Unlike an event's `note`, it hangs on no
+    /// date or place: it is the whole person's, emitted as the `INDI`'s `1 NOTE`.
+    note: Option<String>,
 }
 
 impl Person {
@@ -823,6 +827,7 @@ fn parse_card(
     let mother = take_optional_string(&mut mapping, "mother", Some(&card.id), diagnostics)
         .and_then(|id| check_reference(id, "mother", &card.id, ids, diagnostics));
     let marriage = take_marriage(&mut mapping, &card.id, ids, diagnostics);
+    let note = take_optional_string(&mut mapping, "note", Some(&card.id), diagnostics);
     report_unknown_keys(mapping, None, Some(&card.id), diagnostics);
     if !id_is_slug {
         return None;
@@ -839,6 +844,7 @@ fn parse_card(
         father,
         mother,
         marriage,
+        note,
     })
 }
 
@@ -1084,6 +1090,11 @@ fn emit(config: &Config, people: &[Person], families: &[Family]) -> String {
         }
         for family in spouse_in.get(person.id.as_str()).into_iter().flatten() {
             ged.push_str(&format!("1 FAMS {family}\n"));
+        }
+        // NOTE_STRUCTURE follows the family links in the 5.5.1 INDIVIDUAL_RECORD
+        // grammar — a note on the person, not on any one event.
+        if let Some(note) = &person.note {
+            ged.push_str(&format!("1 NOTE {note}\n"));
         }
     }
     for (index, family) in families.iter().enumerate() {

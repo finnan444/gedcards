@@ -249,6 +249,32 @@ burial:\n  place: Ушуайя\n  coords: -54.8, -68.3\n  note: у флагшт�
     );
 }
 
+/// A `NOTE` on the `INDI` itself — not on an event — reads back into the card's
+/// own `note` field, written last, after the events and any relationships.
+#[test]
+fn a_note_on_the_person_imports() {
+    let ged = format!(
+        "{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Александра /Волкова/\n\
+2 GIVN Александра\n\
+2 SURN Волкова\n\
+1 SEX F\n\
+1 BIRT\n\
+2 DATE 1918\n\
+1 NOTE любимая бабушка, всегда звали бабушкой Шурой\n\
+{SUBMITTER}"
+    );
+    let (_, cards) = import(&ged, None).expect("import should succeed");
+    assert_eq!(cards.len(), 1);
+    assert_eq!(
+        cards[0].yaml,
+        "name: Александра\nsurname: Волкова\nsex: F\n\
+birth:\n  date: 1918\n\
+note: любимая бабушка, всегда звали бабушкой Шурой\n"
+    );
+}
+
 /// GEDCOM requires both a LATI and a LONG under a MAP; a half-written pin cannot
 /// become a card's coords, so it is named rather than dropped.
 #[test]

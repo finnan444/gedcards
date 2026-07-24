@@ -1,7 +1,7 @@
 //! The inverse of `compile`: a GEDCOM 5.5.1 file in, `tree.yaml` and one card
 //! per `INDI` out. What a card has a field for is read back — the name and sex,
 //! the birth, death and burial events with their dates, places, coordinates,
-//! notes, ages and causes,
+//! notes, ages and causes, a note on the person themselves,
 //! and the relationships the `FAM` records hold: parents, marriages and divorces.
 //! A tag with no card field yet (a name piece like `NPFX`, a `SOUR` citation) is
 //! not dropped silently but named, so the next `gedc build` cannot quietly lose
@@ -76,6 +76,7 @@ struct Individual<'a> {
     birth: Option<RawEvent>,
     death: Option<RawEvent>,
     burial: Option<RawEvent>,
+    note: Option<String>,
 }
 
 impl Individual<'_> {
@@ -255,8 +256,9 @@ fn read_level1(body: &[Line], tag: &str) -> Option<String> {
         .and_then(|line| line.value.map(String::from))
 }
 
-/// Reads one `INDI`. `NAME` (with `GIVN`, `SURN`, `_MARNM`), `SEX`, and the
-/// `BIRT`/`DEAT`/`BURI` events map to card fields; `FAMC`/`FAMS` are links the
+/// Reads one `INDI`. `NAME` (with `GIVN`, `SURN`, `_MARNM`), `SEX`, the
+/// `BIRT`/`DEAT`/`BURI` events and a `NOTE` on the person map to card fields;
+/// `FAMC`/`FAMS` are links the
 /// `FAM` records carry the substance of, consumed here in silence. Any other tag
 /// is a fact this card cannot hold yet, so it is named rather than dropped. A
 /// person with a missing name or sex is still returned carrying its diagnostics —
@@ -274,6 +276,7 @@ fn read_individual<'a>(body: &'a [Line], diagnostics: &mut Vec<Diagnostic>) -> I
         birth: None,
         death: None,
         burial: None,
+        note: None,
     };
 
     for (line, children) in nested(body, 1) {
@@ -285,6 +288,9 @@ fn read_individual<'a>(body: &'a [Line], diagnostics: &mut Vec<Diagnostic>) -> I
             "BIRT" => person.birth = read_event(head, "BIRT", children, diagnostics),
             "DEAT" => person.death = read_event(head, "DEAT", children, diagnostics),
             "BURI" => person.burial = read_event(head, "BURI", children, diagnostics),
+            // A NOTE on the INDI itself, not on an event — the person's own
+            // freeform line, read back the way an event's is: value verbatim.
+            "NOTE" => person.note = line.value.map(String::from),
             // The relationships these point at are read from the FAM records,
             // so the links themselves are envelope here, dropped like the header.
             "FAMC" | "FAMS" => {}
@@ -853,6 +859,11 @@ fn card_yaml(
     }
     if let Some(marriage) = marriage {
         push_marriage(&mut yaml, marriage);
+    }
+    // The person's own note comes last, the way it trails the family links in
+    // the record it was read from.
+    if let Some(note) = &person.note {
+        yaml.push_str(&format!("note: {note}\n"));
     }
     yaml
 }
