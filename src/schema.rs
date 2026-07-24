@@ -119,6 +119,9 @@ const EPILOGUE: &str = r##"        "date": {
           }
         }
       }
+    },
+    "note": {
+      "type": "string"
     }
   },
   "definitions": {
