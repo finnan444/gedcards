@@ -106,7 +106,7 @@ dependencies = [
 
 [[package]]
 name = "gedcards"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "boon",
  "serde_json",
