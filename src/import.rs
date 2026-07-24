@@ -1,7 +1,8 @@
 //! The inverse of `compile`: a GEDCOM 5.5.1 file in, `tree.yaml` and one card
 //! per `INDI` out. What a card has a field for is read back — the name and sex,
 //! the birth, death and burial events with their dates, places, coordinates,
-//! notes, ages and causes, a note on the person themselves,
+//! notes, ages and causes, the religious events (`CHR`/`BAPM`/`CONF`/`FCOM`) and
+//! the `RELI` affiliation, a note on the person themselves,
 //! and the relationships the `FAM` records hold: parents, marriages and divorces.
 //! A tag with no card field yet (a name piece like `NPFX`, a `SOUR` citation) is
 //! not dropped silently but named, so the next `gedc build` cannot quietly lose
@@ -76,6 +77,11 @@ struct Individual<'a> {
     birth: Option<RawEvent>,
     death: Option<RawEvent>,
     burial: Option<RawEvent>,
+    christening: Option<RawEvent>,
+    baptism: Option<RawEvent>,
+    confirmation: Option<RawEvent>,
+    first_communion: Option<RawEvent>,
+    religion: Option<String>,
     note: Option<String>,
 }
 
@@ -257,7 +263,8 @@ fn read_level1(body: &[Line], tag: &str) -> Option<String> {
 }
 
 /// Reads one `INDI`. `NAME` (with `GIVN`, `SURN`, `_MARNM`), `SEX`, the
-/// `BIRT`/`DEAT`/`BURI` events and a `NOTE` on the person map to card fields;
+/// `BIRT`/`DEAT`/`BURI` and religious (`CHR`/`BAPM`/`CONF`/`FCOM`) events, the
+/// `RELI` attribute and a `NOTE` on the person map to card fields;
 /// `FAMC`/`FAMS` are links the
 /// `FAM` records carry the substance of, consumed here in silence. Any other tag
 /// is a fact this card cannot hold yet, so it is named rather than dropped. A
@@ -276,6 +283,11 @@ fn read_individual<'a>(body: &'a [Line], diagnostics: &mut Vec<Diagnostic>) -> I
         birth: None,
         death: None,
         burial: None,
+        christening: None,
+        baptism: None,
+        confirmation: None,
+        first_communion: None,
+        religion: None,
         note: None,
     };
 
@@ -288,6 +300,13 @@ fn read_individual<'a>(body: &'a [Line], diagnostics: &mut Vec<Diagnostic>) -> I
             "BIRT" => person.birth = read_event(head, "BIRT", children, diagnostics),
             "DEAT" => person.death = read_event(head, "DEAT", children, diagnostics),
             "BURI" => person.burial = read_event(head, "BURI", children, diagnostics),
+            // The religious rites read back the same as the birth block; RELI is
+            // a bare attribute line, its value taken verbatim like a note's.
+            "CHR" => person.christening = read_event(head, "CHR", children, diagnostics),
+            "BAPM" => person.baptism = read_event(head, "BAPM", children, diagnostics),
+            "CONF" => person.confirmation = read_event(head, "CONF", children, diagnostics),
+            "FCOM" => person.first_communion = read_event(head, "FCOM", children, diagnostics),
+            "RELI" => person.religion = line.value.map(String::from),
             // A NOTE on the INDI itself, not on an event — the person's own
             // freeform line, read back the way an event's is: value verbatim.
             "NOTE" => person.note = line.value.map(String::from),
@@ -849,8 +868,20 @@ fn card_yaml(
     }
     yaml.push_str(&format!("sex: {}\n", person.sex.as_deref().unwrap_or("")));
     push_event(&mut yaml, "birth", person.birth.as_ref());
+    push_event(&mut yaml, "christening", person.christening.as_ref());
     push_event(&mut yaml, "death", person.death.as_ref());
     push_event(&mut yaml, "burial", person.burial.as_ref());
+    push_event(&mut yaml, "baptism", person.baptism.as_ref());
+    push_event(&mut yaml, "confirmation", person.confirmation.as_ref());
+    push_event(
+        &mut yaml,
+        "first_communion",
+        person.first_communion.as_ref(),
+    );
+    // RELI is a bare attribute, written after the events the way it is emitted.
+    if let Some(religion) = &person.religion {
+        yaml.push_str(&format!("religion: {religion}\n"));
+    }
     if let Some(father) = &father {
         yaml.push_str(&format!("father: {father}\n"));
     }

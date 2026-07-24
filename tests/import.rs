@@ -87,6 +87,7 @@ fn build_import_build_is_byte_identical() {
         "dates",
         "burial",
         "relationships",
+        "religion",
         "remarriage",
     ] {
         let (config, cards) = load_fixture(fixture);
@@ -217,6 +218,47 @@ marriage:\n  spouse: petrova-anna\n  date: 1970\n  divorce:\n"
     assert_eq!(
         by_id["ivanova-olga"],
         "name: Ольга\nsurname: Иванова\nsex: F\nfather: ivanov-pyotr\nmother: petrova-anna\n"
+    );
+}
+
+/// The religious events and the `RELI` affiliation read back into the card the
+/// same way the birth block does: `CHR`/`BAPM`/`CONF`/`FCOM` into their event
+/// blocks, in the field order the compiler emits them, and `RELI` into a bare
+/// `religion` line after the events.
+#[test]
+fn religious_events_and_affiliation_import() {
+    let ged = format!(
+        "{HEADER}\
+0 @I1@ INDI\n\
+1 NAME Борис /Орлов/\n\
+2 GIVN Борис\n\
+2 SURN Орлов\n\
+1 SEX M\n\
+1 BIRT\n\
+2 DATE 2 MAY 1899\n\
+1 CHR\n\
+2 DATE 10 MAY 1899\n\
+2 PLAC Москва\n\
+1 BAPM\n\
+2 DATE 10 MAY 1899\n\
+1 CONF\n\
+2 DATE 1913\n\
+1 FCOM\n\
+2 DATE 1911\n\
+1 RELI Православие\n\
+{SUBMITTER}"
+    );
+    let (_, cards) = import(&ged, None).expect("import should succeed");
+    assert_eq!(cards.len(), 1);
+    assert_eq!(
+        cards[0].yaml,
+        "name: Борис\nsurname: Орлов\nsex: M\n\
+birth:\n  date: 1899-05-02\n\
+christening:\n  date: 1899-05-10\n  place: Москва\n\
+baptism:\n  date: 1899-05-10\n\
+confirmation:\n  date: 1913\n\
+first_communion:\n  date: 1911\n\
+religion: Православие\n"
     );
 }
 

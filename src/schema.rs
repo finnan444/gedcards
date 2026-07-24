@@ -6,8 +6,10 @@ use std::collections::BTreeSet;
 
 use crate::{Card, parse_mapping, take_string};
 
-/// Everything up to `father`. `birth` and `death` are the same event block,
-/// so both point at the one definition rather than repeating it.
+/// Everything up to `father`. `birth`, `death` and the religious rites
+/// (`christening`, `baptism`, `confirmation`, `first_communion`) are all the
+/// same event block, so each points at the one definition rather than repeating
+/// it; `religion` is a bare string attribute, not an event.
 ///
 /// A surname is required, but which one is not: `surname` is the one at birth
 /// and a card normally carries it, while a card for a person known only by the
@@ -56,11 +58,26 @@ const PROLOGUE: &str = r##"{
     "birth": {
       "$ref": "#/definitions/event"
     },
+    "christening": {
+      "$ref": "#/definitions/event"
+    },
     "death": {
       "$ref": "#/definitions/event"
     },
     "burial": {
       "$ref": "#/definitions/event"
+    },
+    "baptism": {
+      "$ref": "#/definitions/event"
+    },
+    "confirmation": {
+      "$ref": "#/definitions/event"
+    },
+    "first_communion": {
+      "$ref": "#/definitions/event"
+    },
+    "religion": {
+      "type": "string"
     },
 "##;
 

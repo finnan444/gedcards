@@ -97,6 +97,17 @@ fn remarriage_fixture_compiles_to_expected_ged() {
     assert_eq!(ged, expected("remarriage"));
 }
 
+/// The religious events and the `RELI` affiliation: a man with a christening,
+/// baptism, confirmation and first communion — the rites straddling where a
+/// death and burial would sit, the order the grammar groups them — and a woman
+/// with a christening carrying a place and a note. Both name a denomination.
+#[test]
+fn religion_fixture_compiles_to_expected_ged() {
+    let (config_yaml, cards) = load_fixture("religion");
+    let ged = compile(&config_yaml, &cards).expect("compile should succeed");
+    assert_eq!(ged, expected("religion"));
+}
+
 #[test]
 fn output_does_not_depend_on_card_order() {
     let (config_yaml, mut cards) = load_fixture("three-people");

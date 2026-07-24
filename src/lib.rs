@@ -111,6 +111,20 @@ struct Person {
     birth: Option<Event>,
     death: Option<Event>,
     burial: Option<Event>,
+    /// The religious rites, each the same event block as `birth` — a `date`, a
+    /// `place`, or both, and any EVENT_DETAIL under them. They are the standard
+    /// 5.5.1 individual events `CHR` (child christening), `BAPM` (baptism),
+    /// `CONF` (confirmation) and `FCOM` (first communion) — not the LDS
+    /// ordinances, which carry a temple code instead. See
+    /// docs/research/gedcom-religion-baptism-godparents.md.
+    christening: Option<Event>,
+    baptism: Option<Event>,
+    confirmation: Option<Event>,
+    first_communion: Option<Event>,
+    /// The denomination the person was affiliated with, free text — GEDCOM's
+    /// `RELI`, an individual attribute rather than an event, so it hangs on no
+    /// date or place and is emitted as the `INDI`'s `1 RELI` line.
+    religion: Option<String>,
     father: Option<String>,
     mother: Option<String>,
     marriage: Option<Marriage>,
@@ -822,6 +836,13 @@ fn parse_card(
     let birth = take_event(&mut mapping, "birth", &card.id, diagnostics);
     let death = take_event(&mut mapping, "death", &card.id, diagnostics);
     let burial = take_event(&mut mapping, "burial", &card.id, diagnostics);
+    // The religious rites are the same event block as birth; religion is a bare
+    // attribute line, so it is read as a plain string rather than a block.
+    let christening = take_event(&mut mapping, "christening", &card.id, diagnostics);
+    let baptism = take_event(&mut mapping, "baptism", &card.id, diagnostics);
+    let confirmation = take_event(&mut mapping, "confirmation", &card.id, diagnostics);
+    let first_communion = take_event(&mut mapping, "first_communion", &card.id, diagnostics);
+    let religion = take_optional_string(&mut mapping, "religion", Some(&card.id), diagnostics);
     let father = take_optional_string(&mut mapping, "father", Some(&card.id), diagnostics)
         .and_then(|id| check_reference(id, "father", &card.id, ids, diagnostics));
     let mother = take_optional_string(&mut mapping, "mother", Some(&card.id), diagnostics)
@@ -841,6 +862,11 @@ fn parse_card(
         birth,
         death,
         burial,
+        christening,
+        baptism,
+        confirmation,
+        first_communion,
+        religion,
         father,
         mother,
         marriage,
@@ -1079,11 +1105,23 @@ fn emit(config: &Config, people: &[Person], families: &[Family]) -> String {
             ged.push_str(&format!("2 _MARNM {married_surname}\n"));
         }
         ged.push_str(&format!("1 SEX {}\n", person.sex));
-        // Name, sex, then events: the order the 5.5.1 INDIVIDUAL_RECORD
-        // grammar lists them in.
+        // Name, sex, then the events, in the order the 5.5.1
+        // INDIVIDUAL_EVENT_STRUCTURE groups them (p.34): [BIRT|CHR], then
+        // [DEAT|BURI|CREM], then [BAPM|...], then [CHRA|CONF|FCOM|...] — which is
+        // why the christening rites straddle the death and burial. Each is the
+        // same event block; see docs/research/gedcom-religion-baptism-godparents.md.
         emit_event(&mut ged, "BIRT", person.birth.as_ref());
+        emit_event(&mut ged, "CHR", person.christening.as_ref());
         emit_event(&mut ged, "DEAT", person.death.as_ref());
         emit_event(&mut ged, "BURI", person.burial.as_ref());
+        emit_event(&mut ged, "BAPM", person.baptism.as_ref());
+        emit_event(&mut ged, "CONF", person.confirmation.as_ref());
+        emit_event(&mut ged, "FCOM", person.first_communion.as_ref());
+        // RELI is an INDIVIDUAL_ATTRIBUTE (p.33), so it follows every event and
+        // precedes the family links — a bare denomination line, no block.
+        if let Some(religion) = &person.religion {
+            ged.push_str(&format!("1 RELI {religion}\n"));
+        }
         // FAMC before FAMS, the order the grammar lists the two links in.
         if let Some(family) = child_in.get(person.id.as_str()) {
             ged.push_str(&format!("1 FAMC {family}\n"));
