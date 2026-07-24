@@ -1,0 +1,38 @@
+0 HEAD
+1 SOUR gedc
+1 SUBM @SUB1@
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 LANG Russian
+0 @I1@ INDI
+1 NAME Борис /Орлов/
+2 GIVN Борис
+2 SURN Орлов
+1 SEX M
+1 BIRT
+2 DATE 2 MAY 1899
+2 PLAC Москва
+1 CHR
+2 DATE 10 MAY 1899
+2 PLAC Москва
+1 BAPM
+2 DATE 10 MAY 1899
+1 CONF
+2 DATE 1913
+1 FCOM
+2 DATE 1911
+1 RELI Православие
+0 @I2@ INDI
+1 NAME Вера /Орлова/
+2 GIVN Вера
+2 SURN Орлова
+1 SEX F
+1 CHR
+2 PLAC Тверь
+2 NOTE в приходской церкви
+1 RELI Католичество
+0 @SUB1@ SUBM
+1 NAME Иван Иванов
+0 TRLR

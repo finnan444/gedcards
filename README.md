@@ -55,8 +55,8 @@ birth:
 2 DATE ABT 1925
 ```
 
-> **Status: early.** A card carries a full name, a sex, birth and death events, and
-> its relationships; the compiler emits `INDI` and `FAM` records — enough for a tree
+> **Status: early.** A card carries a full name, a sex, birth, death and religious
+> events, and its relationships; the compiler emits `INDI` and `FAM` records — enough for a tree
 > a viewer can draw. The output is written to the 5.5.1 spec, but it has not yet been
 > round-tripped through a real genealogy service, so treat import compatibility as
 > untested rather than promised.
@@ -244,6 +244,36 @@ good event.
 
 > One YAML wrinkle: `>` starts a block scalar, so an after-date has to be quoted —
 > `date: '>1910'`. The other five forms are written as they appear above.
+
+### Religion and religious events
+
+`christening`, `baptism`, `confirmation` and `first_communion` are the same event
+block as `birth` — a `date`, a `place`, or both, with the same `coords` and `note` —
+and compile to the standard GEDCOM events `CHR`, `BAPM`, `CONF` and `FCOM`. A
+`religion` names the denomination as a free line, emitted as the individual's `1 RELI`:
+
+```yaml
+name: Борис
+surname: Орлов
+sex: M
+birth:
+  date: 1899-05-02
+christening:
+  date: 1899-05-10
+  place: Москва
+confirmation:
+  date: 1913
+first_communion:
+  date: 1911
+religion: Православие
+```
+
+These are the ordinary religious events, not the LDS ordinances (`BAPL`/`CONL`),
+which mean something else and carry a temple code — see
+[the spec notes](docs/research/gedcom-religion-baptism-godparents.md). They emit in
+the order GEDCOM groups them, which is why the rites straddle the death and burial
+in the file rather than following birth. `religion` is free text; GEDCOM does not
+enumerate denominations.
 
 ---
 

@@ -41,11 +41,26 @@
     "birth": {
       "$ref": "#/definitions/event"
     },
+    "christening": {
+      "$ref": "#/definitions/event"
+    },
     "death": {
       "$ref": "#/definitions/event"
     },
     "burial": {
       "$ref": "#/definitions/event"
+    },
+    "baptism": {
+      "$ref": "#/definitions/event"
+    },
+    "confirmation": {
+      "$ref": "#/definitions/event"
+    },
+    "first_communion": {
+      "$ref": "#/definitions/event"
+    },
+    "religion": {
+      "type": "string"
     },
     "father": {
       "enum": [

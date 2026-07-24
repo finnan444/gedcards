@@ -5,12 +5,13 @@ use boon::{Compiler, SchemaIndex, Schemas};
 use gedcards::{Card, schema};
 
 /// Every fixture directory, all of which compile — see tests/golden.rs.
-const FIXTURES: [&str; 7] = [
+const FIXTURES: [&str; 8] = [
     "basic",
     "burial",
     "dates",
     "full-names",
     "relationships",
+    "religion",
     "remarriage",
     "three-people",
 ];

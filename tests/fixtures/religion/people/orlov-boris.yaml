@@ -1,0 +1,16 @@
+name: Борис
+surname: Орлов
+sex: M
+birth:
+  date: 1899-05-02
+  place: Москва
+christening:
+  date: 1899-05-10
+  place: Москва
+baptism:
+  date: 1899-05-10
+confirmation:
+  date: 1913
+first_communion:
+  date: 1911
+religion: Православие
