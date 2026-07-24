@@ -268,6 +268,15 @@ first_communion:
 religion: Православие
 ```
 
+**`christening` or `baptism`?** Both are a baptism, and GEDCOM's own line between
+them is soft — 7.0 defines `BAPM` with a "see also `CHR`". The standard splits them
+by who was baptized: `CHR` is "the religious event of baptizing and/or naming a
+**child**", `BAPM` one "performed in infancy **or later**". So a child baptized days
+after birth — the usual case, and the one a viewer labels "Christening" — is
+`christening`; reach for `baptism` when it happened in adulthood or at an age the
+record does not give. `baptism` also earns its place on the way in: a `BAPM` in
+somebody else's file has a field to land in rather than stopping the import.
+
 These are the ordinary religious events, not the LDS ordinances (`BAPL`/`CONL`),
 which mean something else and carry a temple code — see
 [the spec notes](docs/research/gedcom-religion-baptism-godparents.md). They emit in
