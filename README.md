@@ -96,7 +96,7 @@ cargo install --git https://github.com/finnan444/gedcards
 **3. Make a directory for your tree:**
 
 ```bash
-mkdir -p my-tree/people
+mkdir my-tree
 cd my-tree
 ```
 
@@ -107,14 +107,45 @@ submitter: Иван Иванов
 language: Russian
 ```
 
-**5. Write one card per person in `people/`.** The file name without its extension is
-that person's id, so `people/ivanov-ivan.yaml` is the person `ivanov-ivan`:
+**5. Write one card per person in `people/`.** `gedc new` starts one, creating `people/`
+if it is not there yet and printing the path it wrote:
+
+```bash
+gedc new ivanov-ivan
+```
+
+The file name without its extension is that person's [id](#ids), so
+`people/ivanov-ivan.yaml` is the person `ivanov-ivan`. The card arrives with its fields
+already in it — the three required ones empty, the common optional ones commented out,
+a menu rather than something to delete:
 
 ```yaml
-name: Иван
-surname: Иванов
-sex: M
+name:
+surname:
+sex:
+# patronymic:
+# married_surname:
+# birth:
+#   date:
+#   place:
+# death:
+#   date:
+#   place:
+# father:
+# mother:
+# marriage:
+#   spouse:
+#   date:
+#   place:
 ```
+
+Fill in `name`, `surname` and `sex` (`M` or `F`) — until you do, a build is an error
+naming each empty field (`name: required field is missing`), which is the point: a stub
+is a draft, and the compiler says what is left to do. The fields that are not on the
+menu — `burial`, the [religious events](#religion-and-religious-events),
+[`note`](#notes) — are the rest of this README, and a card takes them just as well.
+An id that is not a slug is refused before any file is written, and an existing card is
+never overwritten.
 
 **6. Build:**
 
@@ -363,7 +394,8 @@ for namesakes a birth-year suffix, `ivanov-pyotr-1947`. Lowercase latin letters,
 and single inner hyphens only. The surname leads so that `people/` sorts into families
 rather than scattering by given name — the same order `gedc import` derives. Lead with
 the surname at birth; for a card that carries only a [`married_surname`](#names), lead
-with that, since it is the only surname there is.
+with that, since it is the only surname there is. `gedc new` checks the shape before it
+writes anything, so a bad id is an error rather than a file to rename.
 
 ---
 
@@ -469,7 +501,7 @@ where you typed it — rather than at the next build.
 
 ## Library
 
-The CLI is a thin wrapper over two seams, each taking text and returning text —
+The CLI is a thin wrapper over three seams, each taking text and returning text —
 no filesystem involved, which is also how the tests drive them:
 
 ```rust
@@ -491,8 +523,10 @@ match compile(config, &cards) {
 }
 ```
 
-`gedcards::schema(&cards)` is the other half of it: the same cards in, the JSON Schema
-`gedc schema` prints out.
+`gedcards::schema(&cards)` is the second: the same cards in, the JSON Schema
+`gedc schema` prints out. `gedcards::new_card(id)` is the third: an id in, the text of a
+new card out — or the diagnostic saying the id is not a slug, the one `compile` would
+report once the file existed. Writing it is the caller's business.
 
 ---
 
@@ -501,7 +535,7 @@ match compile(config, &cards) {
 ```bash
 just          # list recipes
 just build    # build the binary
-just test     # run the test suite (70 tests)
+just test     # run the test suite (95 tests)
 just lint     # rustfmt + clippy
 just check    # lint + test
 ```
