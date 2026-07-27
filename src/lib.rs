@@ -189,8 +189,51 @@ impl Family {
     }
 }
 
-/// The single seam: cards + config in, GEDCOM 5.5.1 text or diagnostics out.
-/// Output is byte-for-byte deterministic for the same input.
+/// The card a new person starts from: the required fields present and empty,
+/// which is a compile error until they are filled — a stub is a draft, and the
+/// compiler is what says what is left to do. The optional fields are comments,
+/// so the card compiles the moment the three are filled and the rest is a menu
+/// rather than a thing to delete. It is the common fields, not every field a
+/// card may carry: the rites, `burial`, `religion`, `coords` and the notes are
+/// in the README, and a template long enough to list them all is one to delete
+/// from rather than to fill in.
+const TEMPLATE: &str = "\
+name:
+surname:
+sex:
+# patronymic:
+# married_surname:
+# birth:
+#   date:
+#   place:
+# death:
+#   date:
+#   place:
+# father:
+# mother:
+# marriage:
+#   spouse:
+#   date:
+#   place:
+";
+
+/// The text of a new card for `id`, or the diagnostic saying the id is not a
+/// slug — the same one `compile` would report, only before the file exists
+/// rather than after. Writing it is the caller's business, so this seam is text
+/// in, text out like `compile` and `schema`.
+pub fn new_card(id: &str) -> Result<String, Diagnostic> {
+    if !is_slug(id) {
+        return Err(Diagnostic {
+            card: Some(id.to_string()),
+            field: None,
+            reason: NOT_A_SLUG.to_string(),
+        });
+    }
+    Ok(TEMPLATE.to_string())
+}
+
+/// The seam of the build: cards + config in, GEDCOM 5.5.1 text or diagnostics
+/// out. Output is byte-for-byte deterministic for the same input.
 pub fn compile(config_yaml: &str, cards: &[Card]) -> Result<String, Vec<Diagnostic>> {
     let mut diagnostics = Vec::new();
 
@@ -772,6 +815,10 @@ fn parse_config(config_yaml: &str, diagnostics: &mut Vec<Diagnostic>) -> Option<
     })
 }
 
+/// What a card whose id is not a slug is told, by `compile` after the file
+/// exists and by `new_card` before it does — one wording for one rule.
+const NOT_A_SLUG: &str = "id must be a slug of lowercase latin letters, digits and hyphens";
+
 /// Ids are slugs per the project glossary: latin translit like
 /// `ivanov-ivan` or `ivanov-pyotr-1947`. Cyrillic is not allowed.
 ///
@@ -799,7 +846,7 @@ fn parse_card(
         diagnostics.push(Diagnostic {
             card: Some(card.id.clone()),
             field: None,
-            reason: "id must be a slug of lowercase latin letters, digits and hyphens".to_string(),
+            reason: NOT_A_SLUG.to_string(),
         });
     }
     let mut mapping = parse_mapping(&card.yaml, Some(&card.id), diagnostics)?;

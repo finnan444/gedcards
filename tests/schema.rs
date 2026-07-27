@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use boon::{Compiler, SchemaIndex, Schemas};
-use gedcards::{Card, schema};
+use gedcards::{Card, new_card, schema};
 
 /// Every fixture directory, all of which compile — see tests/golden.rs.
 const FIXTURES: [&str; 8] = [
@@ -142,6 +142,21 @@ fn a_married_surname_stands_in_for_a_missing_surname() {
     assert!(schema.accepts("name: Мария\nmarried_surname: Иванова\nsex: F\n"));
     assert!(!schema.accepts("name: Мария\nsex: F\n"));
     assert!(!schema.accepts("name: Мария\nmarried_surname:\nsex: F\n"));
+}
+
+/// The card `gedc new` writes, once its three required fields are filled in:
+/// the editor must not squiggle at a card the compiler accepts, and this is the
+/// card every person starts from. The schema is the one that tree prints — a
+/// tree of one, since this is how the first card of a tree begins.
+#[test]
+fn a_filled_in_new_card_validates() {
+    let filled = new_card("petrov-ivan")
+        .unwrap()
+        .replacen("name:", "name: Иван", 1)
+        .replacen("surname:", "surname: Петров", 1)
+        .replacen("sex:", "sex: M", 1);
+    let schema = Schema::of(&[card("petrov-ivan", &filled)]);
+    assert!(schema.accepts(&filled));
 }
 
 #[test]

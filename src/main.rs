@@ -1,16 +1,18 @@
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
 use gedcards::Card;
 
-const USAGE: &str = "usage: gedc <build|schema|import>\n\nbuild        reads people/*.yaml and tree.yaml from the current directory\n             and writes family.ged (GEDCOM 5.5.1, UTF-8).\nschema       prints a JSON Schema for the cards in people/, so an editor can\n             complete and check the ids a card names:\n             gedc schema > .vscode/people.schema.json\nimport [--submitter NAME] FILE\n             reads a GEDCOM 5.5.1 file and writes tree.yaml and one card per\n             person into the current directory. --submitter sets tree.yaml's\n             submitter, for a file whose SUBM an export left out.";
+const USAGE: &str = "usage: gedc <build|new|schema|import>\n\nbuild        reads people/*.yaml and tree.yaml from the current directory\n             and writes family.ged (GEDCOM 5.5.1, UTF-8).\nnew ID       writes people/ID.yaml with the card's fields in it, empty, and\n             prints the path. An existing card is never overwritten.\nschema       prints a JSON Schema for the cards in people/, so an editor can\n             complete and check the ids a card names:\n             gedc schema > .vscode/people.schema.json\nimport [--submitter NAME] FILE\n             reads a GEDCOM 5.5.1 file and writes tree.yaml and one card per\n             person into the current directory. --submitter sets tree.yaml's\n             submitter, for a file whose SUBM an export left out.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.as_slice() {
         [command] if command == "build" => build(),
         [command] if command == "schema" => schema(),
+        [command, id] if command == "new" => new(id),
         [command, rest @ ..] if command == "import" => import(rest),
         _ => {
             eprintln!("{USAGE}");
@@ -52,6 +54,44 @@ fn build() -> ExitCode {
                 "{} problem(s) found, family.ged not written",
                 diagnostics.len()
             );
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Writes a stub card for `id` into people/, and prints the path — just the
+/// path, so it can be handed straight to an editor.
+///
+/// The id is checked before anything is written, so a bad one is an error
+/// rather than a file to rename. `create_new` is what refuses an existing
+/// card: asking whether the file is there and then writing it are two
+/// answers to one question, and only the write's is current.
+fn new(id: &str) -> ExitCode {
+    let template = match gedcards::new_card(id) {
+        Ok(template) => template,
+        Err(diagnostic) => {
+            eprintln!("error: {diagnostic}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if let Err(err) = fs::create_dir_all("people") {
+        eprintln!("error: cannot create people/: {err}");
+        return ExitCode::FAILURE;
+    }
+    let path = Path::new("people").join(format!("{id}.yaml"));
+    let written =
+        fs::File::create_new(&path).and_then(|mut file| file.write_all(template.as_bytes()));
+    match written {
+        Ok(()) => {
+            println!("{}", path.display());
+            ExitCode::SUCCESS
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            eprintln!("error: {} already exists", path.display());
+            ExitCode::FAILURE
+        }
+        Err(err) => {
+            eprintln!("error: cannot write {}: {err}", path.display());
             ExitCode::FAILURE
         }
     }
